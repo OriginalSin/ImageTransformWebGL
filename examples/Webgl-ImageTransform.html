@@ -1,35 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
     <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
     <script src="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet-src.js"></script>
-	<script src="http://scanex.github.io/Leaflet-GeoMixer/build/leaflet-geomixer-dev.js?key=U92596WMIH"></script>
 
-    <link rel="stylesheet" href="http://scanex.github.io/gmxControls/src/css/L.Control.gmxCenter.css" />
-    <link rel="stylesheet" href="http://scanex.github.io/gmxControls/src/css/L.Control.gmxDrawing.css" />
-    <link rel="stylesheet" href="http://scanex.github.io/gmxControls/src/css/L.Control.gmxIcon.css" />
-    <link rel="stylesheet" href="http://scanex.github.io/gmxControls/src/css/L.Control.gmxHide.css" />
-    <link rel="stylesheet" href="http://scanex.github.io/gmxControls/src/css/L.Control.gmxLayers.css" />
-    <link rel="stylesheet" href="http://scanex.github.io/gmxControls/src/css/L.Control.gmxLocation.css" />
-    <link rel="stylesheet" href="http://scanex.github.io/gmxControls/src/css/L.Control.gmxCopyright.css" />
-    <link rel="stylesheet" href="http://scanex.github.io/gmxControls/src/css/L.Control.gmxBottom.css" />
-    <link rel="stylesheet" href="http://scanex.github.io/gmxControls/src/css/L.Control.gmxZoom.css" />
+    <script src="http://kosmosnimki.ru/demo/apiv2/leaflet-geomixer-all-src.js?key=E5FB6CCB5D23B5E119D2F1B26BCC57BD"></script>
+    <link rel="stylesheet" href="http://kosmosnimki.ru/demo/apiv2/css/leaflet-geomixer-all.css" />
 
-	<script src="http://scanex.github.io/gmxControls/src/js/L.Control.gmxCenter.js"></script>
-	<script src="http://scanex.github.io/gmxControls/build/L.Control.gmxDrawing-dev.js"></script>
-	<script src="http://scanex.github.io/gmxControls/src/js/L.Control.gmxIcon.js"></script>
-	<script src="http://scanex.github.io/gmxControls/src/js/L.Control.gmxHide.js"></script>
-	<script src="http://scanex.github.io/gmxControls/src/js/L.Control.gmxLayers.js"></script>
-	<script src="http://scanex.github.io/gmxControls/src/js/L.Control.gmxLocation.js"></script>
-	<script src="http://scanex.github.io/gmxControls/src/js/L.Control.gmxCopyright.js"></script>
-	<script src="http://scanex.github.io/gmxControls/src/js/L.Control.gmxZoom.js"></script>
-	<script src="http://scanex.github.io/gmxControls/src/js/L.Control.gmxBottom.js"></script>
-
-    <link rel="stylesheet" href="http://scanex.github.io/gmxDrawing/css/L.gmxDrawing.css" />
-	<script src="http://scanex.github.io/gmxDrawing/src/L.GmxDrawing.js"></script>
-
+    <!--
+    <script src="../src/L.ImageTransformWebGL.js"></script>
+-->
     <script src="tools/numeric-1.2.6.js"></script>
     <script id="shader-fs" type="x-shader/x-fragment">
         precision mediump float;
@@ -55,19 +38,6 @@
             height: 100%;
             width: 100%;
             margin: 0px;
-        }
-        .leaflet-gmx-icon-boxzoom {
-            background-image: url("http://scanex.github.io/gmxControls/src/img/gmxIcons.png");
-            background-position: -627px -33px;
-            cursor: pointer;
-            width: 30px;
-            height: 30px;
-            clear: none;
-            float: left;
-            margin-left: 6px !important;
-        }
-        .leaflet-gmx-icon-boxzoom:hover, .leaflet-gmx-icon-boxzoom-active {
-            background-position: -627px -2px;
         }
         #controls {
             position: absolute;
@@ -116,19 +86,6 @@
             left: 0px;
             pointer-events: none;
         }
-
-        .control-point {
-            position: absolute;
-            stroke: white;
-            stroke-width: 1px;
-            fill: green;
-            fill-opacity: 0.1;
-        }
-
-        .control-point-hover {
-            stroke: red;
-            stroke-width: 2px;
-        }
     </style>
 	<title>GeoMixer API - примеры подключения оперативных данных по пожарам</title>
 </head>
@@ -156,60 +113,55 @@
             zoomControl: false,
             zoom: 15
         });
-        map.addControl(L.control.gmxZoom());       // default options = {zoomslider: true}
-        map.addControl(L.control.gmxBottom());
-        map.addControl(L.control.gmxLocation());   // default options = {position: 'bottomright'}
-        map.addControl(L.control.gmxCopyright());  // default options = {position: 'bottomleft'}
-        map.addControl(L.control.gmxHide());
-        map.addControl(L.control.gmxCenter());// default options = {color: '#216b9c'}
-        map.addControl(new L.Control.gmxIcon({
-            id: 'boxzoom',
-            toggle: true,
-            title: L.gmxLocale.addText({
-                'eng': {
-                    'boxZoom': 'BoxZoom'
-                },
-                'rus': {
-                    'boxZoom': 'Увеличение'
-                }
-            }).getText('boxZoom'),
-            onAdd: function (control) {
-                //console.log('onAdd', this, arguments);
-                var map = control._map,
-                    _onMouseDown = map.boxZoom._onMouseDown;
-                map.boxZoom._onMouseDown = function (e) {
-                    _onMouseDown.call(map.boxZoom, {
-                        clientX: e.clientX,
-                        clientY: e.clientY,
-                        which: 1,
-                        shiftKey: true
+        map
+            .addControl(L.control.gmxZoom())       // default options = {zoomslider: true}
+            .addControl(L.control.gmxBottom())
+            .addControl(L.control.gmxLocation())   // default options = {position: 'bottomright'}
+            .addControl(L.control.gmxCopyright())  // default options = {position: 'bottomleft'}
+            .addControl(L.control.gmxHide())
+            .addControl(L.control.gmxCenter())      // default options = {color: '#216b9c'}
+            .addControl(new L.Control.gmxIcon({
+                id: 'boxzoom',
+                toggle: true,
+                title: L.gmxLocale.addText({
+                    'eng': {
+                        'boxZoom': 'BoxZoom'
+                    },
+                    'rus': {
+                        'boxZoom': 'Увеличение'
+                    }
+                }).getText('boxZoom'),
+                onAdd: function (control) {
+                    //console.log('onAdd', this, arguments);
+                    var map = control._map,
+                        _onMouseDown = map.boxZoom._onMouseDown;
+                    map.boxZoom._onMouseDown = function (e) {
+                        _onMouseDown.call(map.boxZoom, {
+                            clientX: e.clientX,
+                            clientY: e.clientY,
+                            which: 1,
+                            shiftKey: true
+                        });
+                    }
+                    map.on('boxzoomend', function () {
+                        map.dragging.enable();
+                        map.boxZoom.removeHooks();
+                        control.setActive(false);
                     });
+                },
+                stateChange: function (control) {
+                    console.log('boxzoom', control.options.isActive);
+                    var map = control._map;
+                    if (control.options.isActive) {
+                        map.dragging.disable();
+                        map.boxZoom.addHooks();
+                    } else {
+                        map.dragging.enable();
+                        map.boxZoom.removeHooks();
+                    }
                 }
-                map.on('boxzoomend', function () {
-                    map.dragging.enable();
-                    map.boxZoom.removeHooks();
-                    control.setActive(false);
-                });
-            },
-            stateChange: function (control) {
-                console.log('boxzoom', control.options.isActive);
-                var map = control._map;
-                if (control.options.isActive) {
-                    map.dragging.disable();
-                    map.boxZoom.addHooks();
-                } else {
-                    map.dragging.enable();
-                    map.boxZoom.removeHooks();
-                }
-            }
-        }));
-
-        map.addControl(new L.Control.gmxDrawing({
-            id: 'drawing',
-            stateChange: function (control, key, flag) {
-                //console.log('drawing', control.options.activeKey, key, flag);
-            }
-        }));
+            }))
+            .addControl(new L.Control.gmxDrawing());
 
 		var mapLayer = L.tileLayer('http://{s}.tile.cart.kosmosnimki.ru/m/{z}/{x}/{y}.png', {
 			maxZoom: 21,
@@ -225,7 +177,7 @@
             spot6.addTo(map);
             svalka.addTo(map);
 
-            LayersControl = L.control.gmxLayers({
+            LayersControl = L.control.layers({
                     Map: mapLayer
                 }, {
                     'Spot6_Ленинградская': spot6
@@ -571,7 +523,14 @@ function loadScreenTexture() {
     
     var image = screenImgElement;
     var extent = { w: image.naturalWidth, h: image.naturalHeight };
-    
+/*
+  gl.bindTexture(gl.TEXTURE_2D, glResources.screenTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+  //gl.generateMipmap(gl.TEXTURE_2D);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+ */  
     gl.bindTexture(gl.TEXTURE_2D, glResources.screenTexture);
     
     // Scale up the texture to the next highest power of two dimensions.
@@ -582,6 +541,7 @@ function loadScreenTexture() {
     var ctx = canvas.getContext("2d");
     ctx.drawImage(image, 0, 0, imageAttr.naturalWidth, imageAttr.naturalHeight);
     
+    // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
     
     if(qualityOptions.linearFiltering) {
@@ -611,9 +571,10 @@ function loadScreenTexture() {
     }
     
     gl.bindTexture(gl.TEXTURE_2D, null);
-    
+ 
+
     // Record normalised height and width.
-    var w = extent.w / canvas.width, h = extent.h / canvas.height;
+    var w = extent.w / nextHighestPowerOfTwo(extent.w), h = extent.h / nextHighestPowerOfTwo(extent.h);
     
     srcPoints = [
         { x: 0, y: 0 }, // top-left
@@ -628,7 +589,6 @@ function loadScreenTexture() {
         vertices.push(srcPoints[i].x);
         vertices.push(srcPoints[i].y);
     }
-    
     gl.bindBuffer(gl.ARRAY_BUFFER, glResources.vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
     
