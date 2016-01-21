@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script id="shader-fs" type="x-shader/x-fragment">
+        precision mediump float;
+        varying vec2 vTextureCoord;
+        uniform sampler2D uSampler;
+        void main(void)  {
+            gl_FragColor = texture2D(uSampler, vTextureCoord);
+        }
+    </script>
+     
+    <script id="shader-vs" type="x-shader/x-vertex">
+        attribute vec2 aVertCoord;
+        uniform mat4 uTransformMatrix;
+        varying vec2 vTextureCoord;
+        void main(void) {
+            vTextureCoord = aVertCoord;
+            gl_Position = uTransformMatrix * vec4(aVertCoord, 0.0, 1.0);
+        }
+    </script>
+    <script src="tools/numeric-1.2.6.js"></script>
+</head>
+<body>
+<script>
+function nextHighestPowerOfTwo(x) {
+    --x;
+    for (var i = 1; i < 32; i <<= 1) {
+        x = x | x >> i;
+    }
+    return x + 1;
+}
+function getShader(type, id, gl) {
+    var source = document.getElementById(id).innerHTML,
+        shader = gl.createShader(type);
+     
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+   
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        alert("Ошибка компиляции шейдера: " + gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);  
+        return null;
+    }
+    return shader; 
+}
+function setupGlContext(gl) {
+    // Store return values here
+    var rv = {};
+    var vertexShader = getShader(gl.VERTEX_SHADER, 'shader-vs', gl);
+    var fragmentShader = getShader(gl.FRAGMENT_SHADER, 'shader-fs', gl);
+    
+    // Compile the program
+    rv.shaderProgram = gl.createProgram();
+    gl.attachShader(rv.shaderProgram, vertexShader);
+    gl.attachShader(rv.shaderProgram, fragmentShader);
+    gl.linkProgram(rv.shaderProgram);
+
+    if (!gl.getProgramParameter(rv.shaderProgram, gl.LINK_STATUS)) {
+        addError('Shader linking failed.');
+    }
+        
+    // Create a buffer to hold the vertices
+    rv.vertexBuffer = gl.createBuffer();
+
+    // Find and set up the uniforms and attributes        
+    gl.useProgram(rv.shaderProgram);
+    rv.vertAttrib = gl.getAttribLocation(rv.shaderProgram, 'aVertCoord');
+        
+    rv.transMatUniform = gl.getUniformLocation(rv.shaderProgram, 'uTransformMatrix');
+    rv.samplerUniform = gl.getUniformLocation(rv.shaderProgram, 'uSampler');
+        
+    // Create a texture to use for the screen image
+    rv.screenTexture = gl.createTexture();
+    
+    return rv;
+}
+function run_test(image) {
+    // Create canvas and context
+    var canvas = document.createElement('canvas'),
+        glOpts = { antialias: true, depth: false, preserveDrawingBuffer: true },
+        gl = canvas.getContext('webgl', glOpts) || canvas.getContext('experimental-webgl', glOpts),
+        anisoExt =
+            gl.getExtension('EXT_texture_filter_anisotropic') ||
+            gl.getExtension('MOZ_EXT_texture_filter_anisotropic') ||
+            gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+
+document.body.appendChild(canvas);
+    // if(anisoExt) {  // turn the anisotropy knob all the way to 11 (or down to 1 if it is switched off).
+        // var maxAniso = gl.getParameter(anisoExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+        // gl.texParameterf(gl.TEXTURE_2D, anisoExt.TEXTURE_MAX_ANISOTROPY_EXT, maxAniso);
+    // }
+
+    // Query extension
+    // var OES_texture_float = gl.getExtension('OES_texture_float');
+    // if (!OES_texture_float) {
+        // throw new Error("No support for OES_texture_float");
+    // }
+    // Setup the GL context compiling the shader programs and returning the
+    // attribute and uniform locations.
+    var glResources = setupGlContext(gl),
+        w = image.naturalWidth / nextHighestPowerOfTwo(image.naturalWidth),
+        h = image.naturalHeight / nextHighestPowerOfTwo(image.naturalHeight),
+        vertices = new Float32Array([0,0, w,0, 0,h, w,h]);
+        dstPoints = new Float32Array([0,0, w,0, 0,h, w,h]);
+        
+    gl.bindTexture(gl.TEXTURE_2D, glResources.screenTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, glResources.vertexBuffer);
+    // gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+    // var v = transformationFromQuadCorners(vertices, dstPoints);
+    // gl.uniformMatrix4fv(
+        // glResources.transMatUniform,
+        // false, [
+            // v[0], v[1],    0, v[2],
+            // v[3], v[4],    0, v[5],
+               // 0,    0,    0,    0,
+            // v[6], v[7],    0,    1
+        // ]);
+    // gl.uniform1i(glResources.samplerUniform, 0);
+    // Clear
+    // gl.viewport(0, 0, image.naturalWidth, image.naturalHeight);
+    // gl.clearColor(1.0, 0.0, 0.0, 1.0);
+    // gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Create texture
+    // var texture = gl.createTexture();
+    // gl.bindTexture(gl.TEXTURE_2D, texture);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, texType, null);
+    // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+
+    // Create and attach frame buffer
+    // var fbo = gl.createFramebuffer();
+    // gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    // gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    // gl.bindTexture(gl.TEXTURE_2D, null);
+    // if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE) {
+        // throw new Error("gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE");
+    // }
+
+    redrawImg(gl, glResources, image);
+
+}
+function redrawImg(gl, glResources, image) {
+    var w = image.naturalWidth / nextHighestPowerOfTwo(image.naturalWidth),
+        h = image.naturalHeight / nextHighestPowerOfTwo(image.naturalHeight),
+        vertices = new Float32Array([0,0, w,0, 0,h, w,h]);
+        //dstPoints = new Float32Array([44,0, 334,0, 0,h, w - 134,h]);
+        dstPoints = new Float32Array([
+            -0.11899038461538458, -0.08783068783068781,
+            -0.35697115384615385, 0.417989417989418,
+            0.05528846153846145, 0.33544973544973544,
+            -0.18389423076923073, 0.9259259259259259
+        ]);
+    
+    var vpW = image.naturalWidth;
+    var vpH = image.naturalHeight;
+
+    // Get the transform
+    var v = transformationFromQuadCorners(vertices, dstPoints);
+    
+    // set background to full transparency
+    gl.clearColor(0,0,0,0);
+    gl.viewport(0, 0, vpW, vpH);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    gl.useProgram(glResources.shaderProgram);
+
+    // draw the triangles
+    gl.bindBuffer(gl.ARRAY_BUFFER, glResources.vertexBuffer);
+    gl.enableVertexAttribArray(glResources.vertAttrib);
+    gl.vertexAttribPointer(glResources.vertAttrib, 2, gl.FLOAT, false, 0, 0);
+    
+    /*  If 'v' is the vector of transform coefficients, we want to use
+        the following matrix:
+    
+        [v[0], v[3],   0, v[6]],
+        [v[1], v[4],   0, v[7]],
+        [   0,    0,   1,    0],
+        [v[2], v[5],   0,    1]
+    
+        which must be unravelled and sent to uniformMatrix4fv() in *column-major*
+        order. Hence the mystical ordering of the array below.
+    */
+    gl.uniformMatrix4fv(
+        glResources.transMatUniform,
+        false, [
+            v[0], v[1],    0, v[2],
+            v[3], v[4],    0, v[5],
+               0,    0,    0,    0,
+            v[6], v[7],    0,    1
+        ]);
+        
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, glResources.screenTexture);
+    gl.uniform1i(glResources.samplerUniform, 0);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);    
+
+    // Clear
+    // gl.viewport(0, 0, 256, 256);
+    // gl.clear(gl.COLOR_BUFFER_BIT);
+    var pixels = new Uint8Array(4 * 256 * 256);
+    gl.readPixels(0, 0, 256, 256, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+    var resCanvas = document.createElement('canvas');
+    resCanvas.width = resCanvas.height = 256;
+    var ctx = resCanvas.getContext('2d');
+    var imgData = ctx.createImageData(256, 256);
+    imgData.data.set(pixels);
+    ctx.putImageData(imgData, 0 , 0);
+    document.body.appendChild(resCanvas);
+}
+
+function transformationFromQuadCorners(before, after) {
+    /*
+     Return the 8 elements of the transformation matrix which maps
+     the points in *before* to corresponding ones in *after*. The
+     points should be specified as
+     [{x:x1,y:y1}, {x:x2,y:y2}, {x:x3,y:y2}, {x:x4,y:y4}].
+     
+     Note: There are 8 elements because the bottom-right element is
+     assumed to be '1'.
+    */
+ 
+    // var b = numeric.transpose([after]);
+    // var b = numeric.transpose([[
+        // after[0].x, after[0].y,
+        // after[1].x, after[1].y,
+        // after[2].x, after[2].y,
+        // after[3].x, after[3].y ]]);
+    
+    var A = [];
+    for(var i = 0, len = before.length; i < len; i += 2) {
+        var ax = after[i],  ay = after[i + 1],
+            bx = before[i], by = before[i + 1];
+        A.push([
+            bx, 0, -ax * bx,
+            by, 0, -ax * by, 1, 0]);
+        A.push([
+            0, bx, -ay * bx,
+            0, by, -ay * by, 0, 1]);
+    }
+    
+    // Solve for T and return the elements as a single array
+    return numeric.transpose(numeric.dot(numeric.inv(A), numeric.transpose([after])))[0];
+}
+
+function main() {
+    run_test(false);
+    console.log('Test passed using GL_UNSIGNED_BYTE');
+    run_test(true);
+    console.log('Test passed using GL_FLOAT');
+}
+    var image = document.createElement('img');
+    image.onload = function(ev) {
+        run_test(image);
+    };
+    image.src = 'img/aero.jpg';
+</script>
+</body>
+</html>
