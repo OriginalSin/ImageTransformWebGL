@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
+    <script src="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet-src.js"></script>
+
+    <script src="http://kosmosnimki.ru/demo/apiv2/leaflet-geomixer-all-src.js?key=E5FB6CCB5D23B5E119D2F1B26BCC57BD"></script>
+    <link rel="stylesheet" href="http://kosmosnimki.ru/demo/apiv2/css/leaflet-geomixer-all.css" />
+
+    <!--
+    <script src="../src/L.ImageTransformWebGL.js"></script>
+-->
+    <script src="tools/numeric-1.2.6.js"></script>
+    <script id="shader-fs" type="x-shader/x-fragment">
+        precision mediump float;
+        varying vec2 vTextureCoord;
+        uniform sampler2D uSampler;
+        void main(void)  {
+            gl_FragColor = texture2D(uSampler, vTextureCoord);
+        }
+    </script>
+     
+    <script id="shader-vs" type="x-shader/x-vertex">
+        attribute vec2 aVertCoord;
+        uniform mat4 uTransformMatrix;
+        varying vec2 vTextureCoord;
+        void main(void) {
+            vTextureCoord = aVertCoord;
+            gl_Position = uTransformMatrix * vec4(aVertCoord, 0.0, 1.0);
+        }
+    </script>
+
+    <style>
+        html, body, #map, #screenCanvas {
+            height: 100%;
+            width: 100%;
+            margin: 0px;
+        }
+        #controls {
+            position: absolute;
+			right: 20px;
+			bottom: 240px;
+			z-index: 2;
+			background-color: #ffffff;
+			border-radius: 5px;
+            box-shadow: 0 1px 7px rgba(0,0,0,0.65);
+        }
+        
+        #controls button {
+            border-radius: 5px;
+            
+        }
+        
+        #controls > div{
+            padding: 6px;
+        }
+        #screenCanvas {
+            position: absolute;
+            left: 0px;
+            top: 0px;
+            pointer-events: none;
+            opacity: 1;
+        }
+
+        #imageCont {
+            position: absolute;
+            bottom: 25px;
+            right: 5px;
+			z-index: 1;
+			background-color: #ffffff;
+			border-radius: 5px;
+            box-shadow: 0 1px 7px rgba(0,0,0,0.65);
+        }
+        #image {
+			width: 200px;
+			height: 200px;
+            padding: 5px;
+            padding-bottom: 0px;
+            cursor: move;
+        }
+        #controlHandles {
+            position: absolute;
+            left: 0px;
+            pointer-events: none;
+        }
+    </style>
+	<title>GeoMixer API - примеры подключения оперативных данных по пожарам</title>
+</head>
+
+<body>
+	<div id="map"></div>
+    <canvas id="screenCanvas"></canvas>
+	<div id="controls">
+		<div>
+            Points: <span id="points">0</span>
+            <button id="start">Start</button>
+        </div>
+	</div>
+	<div id="imageCont">
+        <image id="image" />
+        <svg width="250" height="250" id="controlHandles"></svg>
+	</div>
+
+<script>
+        var map = new L.Map('map', {
+            layers: [],
+            crs: L.CRS.EPSG3395,
+            center: new L.LatLng(60.555926, 30.530061),
+            attributionControl: false,
+            zoomControl: false,
+            zoom: 15
+        });
+        map
+            .addControl(L.control.gmxZoom())       // default options = {zoomslider: true}
+            .addControl(L.control.gmxBottom())
+            .addControl(L.control.gmxLocation())   // default options = {position: 'bottomright'}
+            .addControl(L.control.gmxCopyright())  // default options = {position: 'bottomleft'}
+            .addControl(L.control.gmxHide())
+            .addControl(L.control.gmxCenter())      // default options = {color: '#216b9c'}
+            .addControl(new L.Control.gmxIcon({
+                id: 'boxzoom',
+                toggle: true,
+                title: L.gmxLocale.addText({
+                    'eng': {
+                        'boxZoom': 'BoxZoom'
+                    },
+                    'rus': {
+                        'boxZoom': 'Увеличение'
+                    }
+                }).getText('boxZoom'),
+                onAdd: function (control) {
+                    //console.log('onAdd', this, arguments);
+                    var map = control._map,
+                        _onMouseDown = map.boxZoom._onMouseDown;
+                    map.boxZoom._onMouseDown = function (e) {
+                        _onMouseDown.call(map.boxZoom, {
+                            clientX: e.clientX,
+                            clientY: e.clientY,
+                            which: 1,
+                            shiftKey: true
+                        });
+                    }
+                    map.on('boxzoomend', function () {
+                        map.dragging.enable();
+                        map.boxZoom.removeHooks();
+                        control.setActive(false);
+                    });
+                },
+                stateChange: function (control) {
+                    console.log('boxzoom', control.options.isActive);
+                    var map = control._map;
+                    if (control.options.isActive) {
+                        map.dragging.disable();
+                        map.boxZoom.addHooks();
+                    } else {
+                        map.dragging.enable();
+                        map.boxZoom.removeHooks();
+                    }
+                }
+            }))
+            .addControl(new L.Control.gmxDrawing());
+
+		var mapLayer = L.tileLayer('http://{s}.tile.cart.kosmosnimki.ru/m/{z}/{x}/{y}.png', {
+			maxZoom: 21,
+            maxNativeZoom: 17,
+			attribution: '© <a href="http://maps.kosmosnimki.ru/Apikey/License.html" style="color: inherit;" target="_blank">«СканЭкс»</a>, 2007-2014'
+		}).addTo(map);
+
+        var LayersControl = null;
+        L.gmx.loadLayers([
+            {mapID: 'UIRCQ', layerID: '2565426E471B4D69B2C8F9A302BA6524'}
+            ,{mapID: 'UIRCQ', layerID: '65365C63A64F4C4987CD2EA52FBA41C4'}
+        ]).then(function(spot6, svalka) {
+            spot6.addTo(map);
+            svalka.addTo(map);
+
+            LayersControl = L.control.layers({
+                    Map: mapLayer
+                }, {
+                    'Spot6_Ленинградская': spot6
+                    ,'Свалки в районе Ладожского озера': svalka
+                }, {collapsed: false}).addTo(map);
+        });
+        
+    function adj(m) { // Compute the adjugate of m
+        return [
+            m[4] * m[8] - m[5] * m[7], m[2] * m[7] - m[1] * m[8], m[1] * m[5] - m[2] * m[4],
+            m[5] * m[6] - m[3] * m[8], m[0] * m[8] - m[2] * m[6], m[2] * m[3] - m[0] * m[5],
+            m[3] * m[7] - m[4] * m[6], m[1] * m[6] - m[0] * m[7], m[0] * m[4] - m[1] * m[3]
+        ];
+    }
+
+    function multmm(a, b) { // multiply two matrices
+        var c = Array(9);
+        for (var i = 0; i !== 3; ++i) {
+            for (var j = 0; j !== 3; ++j) {
+                var cij = 0;
+                for (var k = 0; k !== 3; ++k) {
+                    cij += a[3 * i + k] * b[3 * k + j];
+                }
+                c[3 * i + j] = cij;
+            }
+        }
+        return c;
+    }
+
+    function multmv(m, v) { // multiply matrix and vector
+        return [
+            m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+            m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
+            m[6] * v[0] + m[7] * v[1] + m[8] * v[2]
+        ];
+    }
+
+    function basisToPoints(x1, y1, x2, y2, x3, y3, x4, y4) {
+        var m = [
+            x1, x2, x3,
+            y1, y2, y3,
+            1,  1,  1
+        ];
+        var v = multmv(adj(m), [x4, y4, 1]);
+        return multmm(m, [
+            v[0], 0, 0,
+            0, v[1], 0,
+            0, 0, v[2]
+        ]);
+    }
+
+var ProjectiveUtils = {
+        general2DProjection: function(
+              x1s, y1s, x1d, y1d,
+              x2s, y2s, x2d, y2d,
+              x3s, y3s, x3d, y3d,
+              x4s, y4s, x4d, y4d
+        ) {
+          var s = basisToPoints(x1s, y1s, x2s, y2s, x3s, y3s, x4s, y4s);
+          var d = basisToPoints(x1d, y1d, x2d, y2d, x3d, y3d, x4d, y4d);
+          return multmm(d, adj(s));
+        },
+
+        project: function(m, x, y) {
+            var v = multmv(m, [x, y, 1]);
+            return [v[0] / v[2], v[1] / v[2]];
+        },
+        adj: adj
+    };
+
+
+var screenImgElement = null;
+
+var controlPoints = [
+    { x: 100, y: 100 },
+    { x: 300, y: 100 },
+    { x: 100, y: 400 },
+    { x: 300, y: 400 }
+];
+
+// The normalised texture co-ordinates of the quad in the screen image.
+var srcPoints;
+
+// UI for controlling quality
+var anisotropicFilteringElement = document.getElementById('anisotropicFiltering');
+var mipMappingFilteringElement = document.getElementById('mipMapping');
+var linearFilteringElement = document.getElementById('linearFiltering');
+
+// Options for controlling quality.
+var qualityOptions = { };
+//syncQualityOptions();
+
+// UI for saving image
+//document.getElementById('saveResult').onclick = saveResult;
+
+// Reflect any changes in quality options
+// anisotropicFilteringElement.onchange = syncQualityOptions;
+// mipMappingFilteringElement.onchange = syncQualityOptions;
+// linearFilteringElement.onchange = syncQualityOptions;
+
+// Wire in the control handles to dragging. Call 'redrawImg' when they change.
+var controlHandlesElement = document.getElementById('controlHandles');
+//setupControlHandles(controlHandlesElement, redrawImg);
+
+// Wire up the control handle toggle
+// var drawControlPointsElement = document.getElementById('drawControlPoints');
+// drawControlPointsElement.onchange = function() {
+    // controlHandlesElement.style.visibility =
+        // !!(drawControlPointsElement.checked) ? 'visible' : 'hidden';
+// }
+
+// Create a WegGL context from the canvas which will have the screen image
+// rendered to it. NB: preserveDrawingBuffer is needed for rendering the
+// image for download. (Otherwise, the canvas appears to have nothing in
+// it.)
+
+// This object will store the width and height of the screen image in
+// normalised texture co-ordinates in its 'w' and 'h' fields.
+var screenTextureSize;
+var gl = null;
+var glResources = null;
+var anisoExt = null;
+var screenCanvasElement = document.getElementById('screenCanvas');
+var glOpts = null;
+
+        var svg = document.getElementById("controlHandles");
+        // var image = new Image();
+        // image.width = 200;
+        // image.height = 200;
+        var image = document.getElementById("image");
+        var imageAttr = null;
+        image.onload = function(ev) {
+            imageAttr = {
+                naturalWidth: image.naturalWidth
+                ,naturalHeight: image.naturalHeight
+                ,width: image.width
+                ,height: image.height
+                ,points: []
+            };
+            var pbbox = map.getPixelBounds();
+
+screenCanvasElement.width = pbbox.max.x - pbbox.min.x;
+screenCanvasElement.height = pbbox.max.y - pbbox.min.y;
+            //image.draggable = true;
+screenImgElement = image;
+            
+syncQualityOptions();
+//var screenCanvasElement = document.getElementById('screenCanvas');
+glOpts = { antialias: true, depth: false, preserveDrawingBuffer: true };
+gl =
+    screenCanvasElement.getContext('webgl', glOpts) ||
+    screenCanvasElement.getContext('experimental-webgl', glOpts);
+if(!gl) {
+    addError("Your browser doesn't seem to support WebGL.");
+}
+
+// See if we have the anisotropic filtering extension by trying to get
+// if from the WebGL implementation.
+anisoExt =
+    gl.getExtension('EXT_texture_filter_anisotropic') ||
+    gl.getExtension('MOZ_EXT_texture_filter_anisotropic') ||
+    gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+
+// If we failed, tell the user that their image will look like poo on a
+// stick.
+if(!anisoExt) {
+    anisotropicFilteringElement.checked = false;
+    anisotropicFilteringElement.disabled = true;
+    addError("Your browser doesn't support anisotropic filtering. "+
+             "Ordinary MIP mapping will be used.");
+}
+
+// Setup the GL context compiling the shader programs and returning the
+// attribute and uniform locations.
+glResources = setupGlContext();
+
+            initPoints();
+            //loadScreenTexture();
+            console.log('image', imageAttr);
+            
+        }
+image.crossOrigin = '';
+image.src = 'img/aero.jpg';
+
+        // image.dragstart = function(ev) {
+            // if (imageAttr) {
+                // this.style.opacity = '0';  // this / e.target is the source node.
+            // }
+        // }
+        //image.ondragend = function(ev) {
+        var setControlPoints = function() {
+            controlPoints = [];
+            var pbbox = map.getPixelBounds(),
+                min = pbbox.min;
+            for (var i = 0, len = imageAttr.points.length; i < len; i++) {
+                var marker = imageAttr.points[i],
+                    latLng = marker.getLatLng();
+                var pos = marker._map.latLngToLayerPoint(latLng);
+                pos = marker._map.layerPointToContainerPoint(pos);
+                    //point = marker.options.point;
+                controlPoints.push(pos);
+                //controlPoints.push({x: point.x - min.x, y: point.y - min.y});
+            }
+            imageAttr.screenBbox = pbbox;
+            if (!srcPoints) loadScreenTexture();
+            redrawImg();
+        }
+        var initPoints = function() {
+            if (imageAttr) {
+                image.style.cursor = 'default';
+                var w = imageAttr.width,
+                    h = imageAttr.height,
+                    pbbox = map.getPixelBounds(),
+                    center = pbbox.getBottomLeft();
+                center.x += (pbbox.max.x - pbbox.min.x - w)/2;
+                center.y -= (pbbox.max.y - pbbox.min.y + h)/2;
+                //controlPoints = [];
+                addPoint({x: 0, y: 0});
+                addCircle(L.point([
+                    center.x,
+                    center.y
+                ]));
+                //controlPoints.push({x: center.x - pbbox.min.x, y: center.y - pbbox.min.y});
+
+                addPoint({x: w, y: 0});
+                addCircle(L.point([
+                    center.x + w,
+                    center.y
+                ]));
+                //controlPoints.push({x: center.x + w - pbbox.min.x, y: center.y - pbbox.min.y});
+
+                addPoint({x: 0, y: h});
+                addCircle(L.point([
+                    center.x,
+                    center.y + h
+                ]));
+                //controlPoints.push({x: center.x - pbbox.min.x, y: center.y + h - pbbox.min.y});
+
+                addPoint({x: w, y: h});
+                addCircle(L.point([
+                    center.x + w,
+                    center.y + h
+                ]));
+                //controlPoints.push({x: center.x + w - pbbox.min.x, y: center.y + h - pbbox.min.y});
+                console.log('ondragend');
+                
+                setControlPoints();
+// controlPoints = [
+    // imageAttr.points[0].options.point,//{ x: 100, y: 100 },
+    // imageAttr.points[1].options.point,//{ x: 300, y: 100 },
+    // imageAttr.points[2].options.point,//{ x: 100, y: 400 },
+    // imageAttr.points[3].options.point//{ x: 300, y: 400 }
+// ];
+var tt = 1;
+//controlPoints = imageAttr.points;
+            }
+        }
+        // image.ondrag = function(ev) {
+            // if (imageAttr) {
+                // console.log('ondrag', ev);
+            // }
+        // }
+        var addPoint = function(ph) {
+            if (imageAttr) {
+                imageAttr.currPoint = ph;
+                var el = document.createElementNS(L.Path.SVG_NS, 'circle');
+                el.setAttribute('class', 'control-point');
+                el.setAttribute('cx', ph.x + 5);
+                el.setAttribute('cy', ph.y + 5);
+                el.setAttribute('r', 5);
+                imageAttr.currPoint.el = el;
+
+                svg.appendChild(el);
+            }
+        }
+        image.onclick = function(ev) {
+            if (imageAttr) {
+                addPoint({
+                    x: ev.layerX
+                    ,y: ev.layerY
+                });
+                console.log('onclick', imageAttr);
+            }
+        }
+
+        var addCircle = function(point) {
+            if (imageAttr.currPoint) {
+                var opt = imageAttr.currPoint;
+                opt.draggable = true;
+                opt.point = point;
+                var latlng = map.unproject(point);
+                var marker = L.marker(latlng, opt).addTo(map);
+                marker
+                    .on('drag', function(ev1) {
+//var pos = marker._map.latLngToLayerPoint(marker.getLatLng());
+screenCanvasElement.style.opacity = 0.5;
+setControlPoints();
+                        console.log('drag', ev1, marker.getLatLng());
+                    })
+                    .on('mouseover', function(ev1) {
+                        var el = marker.options.el;
+                        L.DomUtil.addClass(el, 'control-point-hover');
+                        console.log('mouseover', ev1);
+                    })
+                    .on('mouseout', function(ev1) {
+                        var el = marker.options.el;
+                        L.DomUtil.removeClass(el, 'control-point-hover');
+screenCanvasElement.style.opacity = 1;
+                        console.log('removeClass', ev1);
+                    })
+                    
+                    .on('dblclick', function(ev1) {
+                        var el = marker.options.el;
+                        el.parentNode.removeChild(el);
+                        map.removeLayer(marker);
+                        for (var i = 0, len = imageAttr.points.length; i < len; i++) {
+                            if (imageAttr.points[i] === marker) {
+                                imageAttr.points.splice(i, 1);
+                                break;
+                            }
+                        }
+                        console.log('dblclick', imageAttr);
+                    });
+                delete imageAttr.currPoint;
+                imageAttr.points.push(marker);
+            }
+        }
+        map
+            .on('move', function(ev) {
+setControlPoints();
+            })
+            .on('click', function(ev) {
+                addCircle(ev.latlng);
+                console.log('click', ev);
+            });
+
+        document.getElementById("start").onclick = function(ev) {
+            if (imageAttr) {
+                console.log('start', ev);
+            }
+            
+        }
+
+// The only readon this element exists in the DOM is too (potentially)
+// cache the image for us before this script is run and to specity
+// the screen image URL in a more obvious place.
+// var imgElement = document.getElementById('screen');
+// imgElement.style.display = 'none';
+
+// Create an element to hold the screen image and arracnge for loadScreenTexture
+// to be called when the image is loaded.
+// var screenImgElement = new Image();
+// screenImgElement.crossOrigin = '';
+// screenImgElement.onload = loadScreenTexture;
+// screenImgElement.src = imgElement.src;
+// Функция создания шейдера
+function getShader(type, id) {
+    var source = document.getElementById(id).innerHTML;
+ 
+    var shader = gl.createShader(type);
+     
+    gl.shaderSource(shader, source);
+ 
+    gl.compileShader(shader);
+   
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        alert("Ошибка компиляции шейдера: " + gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);  
+        return null;
+    }
+    return shader; 
+}
+function setupGlContext() {
+    // Store return values here
+    var rv = {};
+    var vertexShader = getShader(gl.VERTEX_SHADER, 'shader-vs');
+    var fragmentShader = getShader(gl.FRAGMENT_SHADER, 'shader-fs');
+    
+    // Compile the program
+    rv.shaderProgram = gl.createProgram();
+    gl.attachShader(rv.shaderProgram, vertexShader);
+    gl.attachShader(rv.shaderProgram, fragmentShader);
+    gl.linkProgram(rv.shaderProgram);
+
+    if (!gl.getProgramParameter(rv.shaderProgram, gl.LINK_STATUS)) {
+        addError('Shader linking failed.');
+    }
+        
+    // Create a buffer to hold the vertices
+    rv.vertexBuffer = gl.createBuffer();
+
+    // Find and set up the uniforms and attributes        
+    gl.useProgram(rv.shaderProgram);
+    rv.vertAttrib = gl.getAttribLocation(rv.shaderProgram, 'aVertCoord');
+        
+    rv.transMatUniform = gl.getUniformLocation(rv.shaderProgram, 'uTransformMatrix');
+    rv.samplerUniform = gl.getUniformLocation(rv.shaderProgram, 'uSampler');
+        
+    // Create a texture to use for the screen image
+    rv.screenTexture = gl.createTexture();
+    
+    return rv;
+}
+
+function loadScreenTexture() {
+    if(!gl || !glResources) { return; }
+    
+    var image = screenImgElement;
+    var extent = { w: image.naturalWidth, h: image.naturalHeight };
+/*
+  gl.bindTexture(gl.TEXTURE_2D, glResources.screenTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+  //gl.generateMipmap(gl.TEXTURE_2D);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+ */  
+    gl.bindTexture(gl.TEXTURE_2D, glResources.screenTexture);
+    
+    // Scale up the texture to the next highest power of two dimensions.
+    var canvas = document.createElement("canvas");
+    canvas.width = nextHighestPowerOfTwo(extent.w);
+    canvas.height = nextHighestPowerOfTwo(extent.h);
+    
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(image, 0, 0, imageAttr.naturalWidth, imageAttr.naturalHeight);
+    
+    // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+    
+    if(qualityOptions.linearFiltering) {
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER,
+                         qualityOptions.mipMapping
+                             ? gl.LINEAR_MIPMAP_LINEAR
+                             : gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    } else {
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, 
+                         qualityOptions.mipMapping
+                             ? gl.NEAREST_MIPMAP_NEAREST
+                             : gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    }
+    
+    if(anisoExt) {
+        // turn the anisotropy knob all the way to 11 (or down to 1 if it is
+        // switched off).
+        var maxAniso = qualityOptions.anisotropicFiltering ?
+            gl.getParameter(anisoExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT) : 1;
+        gl.texParameterf(gl.TEXTURE_2D, anisoExt.TEXTURE_MAX_ANISOTROPY_EXT, maxAniso);
+    }
+    
+    if(qualityOptions.mipMapping) {
+        gl.generateMipmap(gl.TEXTURE_2D);
+    }
+    
+    gl.bindTexture(gl.TEXTURE_2D, null);
+ 
+
+    // Record normalised height and width.
+    var w = extent.w / nextHighestPowerOfTwo(extent.w), h = extent.h / nextHighestPowerOfTwo(extent.h);
+    
+    srcPoints = [
+        { x: 0, y: 0 }, // top-left
+        { x: w, y: 0 }, // top-right
+        { x: 0, y: h }, // bottom-left
+        { x: w, y: h }  // bottom-right
+    ];
+        
+    // setup the vertex buffer with the source points
+    var vertices = [];
+    for(var i=0; i<srcPoints.length; i++) {
+        vertices.push(srcPoints[i].x);
+        vertices.push(srcPoints[i].y);
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, glResources.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    
+    // Redraw the image
+    redrawImg();
+}
+
+//function isPowerOfTwo(x) { return (x & (x - 1)) == 0; }
+ 
+function nextHighestPowerOfTwo(x) {
+    --x;
+    for (var i = 1; i < 32; i <<= 1) {
+        x = x | x >> i;
+    }
+    return x + 1;
+}
+
+function redrawImg() {
+    if(!gl || !glResources || !srcPoints) { return; }
+    
+    var vpW = screenCanvasElement.width;
+    var vpH = screenCanvasElement.height;
+    
+    // Find where the control points are in 'window coordinates'. I.e.
+    // where thecanvas covers [-1,1] x [-1,1]. Note that we have to flip
+    // the y-coord.
+    var dstPoints = [];
+    for(var i=0; i<controlPoints.length; i++) {
+        dstPoints.push({
+            x: (2 * controlPoints[i].x / vpW) - 1,
+            y: -(2 * controlPoints[i].y / vpH) + 1
+        });
+    }
+    
+    // Get the transform
+    //var v = transformationFromQuadCorners(srcPoints, dstPoints);
+    // var v = ProjectiveUtils.general2DProjection(
+        // -1, 1, dstPoints[0].x, dstPoints[0].y,
+        // 1, 1, dstPoints[1].x, dstPoints[1].y,
+        // -1, -1, dstPoints[2].x, dstPoints[2].y,
+        // 1, -1, dstPoints[3].x, dstPoints[3].y
+    // );
+    var v = ProjectiveUtils.general2DProjection(
+        0, 0, controlPoints[0].x, -controlPoints[0].y,
+        vpW, 0, controlPoints[1].x, -controlPoints[1].y,
+        vpW, vpH, controlPoints[2].x, -controlPoints[2].y,
+        0, vpH, controlPoints[3].x, -controlPoints[3].y
+    );
+    
+    if (v[8]) {
+        //matrix normalization
+        for (i = 0; i !== 9; ++i) {
+            // v[i] = 2 * v[i] / v[8] - 1;
+            v[i] = v[i] / v[8];
+        }
+    }
+    
+    // set background to full transparency
+    gl.clearColor(0,0,0,0);
+    gl.viewport(0, 0, vpW, vpH);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    gl.useProgram(glResources.shaderProgram);
+
+    // draw the triangles
+    gl.bindBuffer(gl.ARRAY_BUFFER, glResources.vertexBuffer);
+    gl.enableVertexAttribArray(glResources.vertAttrib);
+    gl.vertexAttribPointer(glResources.vertAttrib, 2, gl.FLOAT, false, 0, 0);
+    
+    /*  If 'v' is the vector of transform coefficients, we want to use
+        the following matrix:
+    
+        [v[0], v[3],   0, v[6]],
+        [v[1], v[4],   0, v[7]],
+        [   0,    0,   1,    0],
+        [v[2], v[5],   0,    1]
+    
+        which must be unravelled and sent to uniformMatrix4fv() in *column-major*
+        order. Hence the mystical ordering of the array below.
+    */
+    gl.uniformMatrix4fv(
+        glResources.transMatUniform,
+        false, [
+        // [v[0], v[3],   0, v[6]],
+        // [v[1], v[4],   0, v[7]],
+        // [   0,    0,   1,    0],
+        // [v[2], v[5],   0,    1]
+            v[0], v[1],    0, v[2],
+            v[3], v[4],    0, v[5],
+               0,    0,    0,    0,
+            v[6], v[7],    0,    1
+        ]);
+        
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, glResources.screenTexture);
+    gl.uniform1i(glResources.samplerUniform, 0);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);    
+}
+
+function transformationFromQuadCorners(before, after)
+{
+    /*
+     Return the 8 elements of the transformation matrix which maps
+     the points in *before* to corresponding ones in *after*. The
+     points should be specified as
+     [{x:x1,y:y1}, {x:x2,y:y2}, {x:x3,y:y2}, {x:x4,y:y4}].
+     
+     Note: There are 8 elements because the bottom-right element is
+     assumed to be '1'.
+    */
+ 
+    var b = numeric.transpose([[
+        after[0].x, after[0].y,
+        after[1].x, after[1].y,
+        after[2].x, after[2].y,
+        after[3].x, after[3].y ]]);
+    
+    var A = [];
+    for(var i=0; i<before.length; i++) {
+        A.push([
+            before[i].x, 0, -after[i].x*before[i].x,
+            before[i].y, 0, -after[i].x*before[i].y, 1, 0]);
+        A.push([
+            0, before[i].x, -after[i].y*before[i].x,
+            0, before[i].y, -after[i].y*before[i].y, 0, 1]);
+    }
+    
+    // Solve for T and return the elements as a single array
+    return numeric.transpose(numeric.dot(numeric.inv(A), b))[0];
+}
+
+function syncQualityOptions() {
+    qualityOptions.anisotropicFiltering = 
+    qualityOptions.mipMapping = 
+    qualityOptions.linearFiltering = true;
+    
+    // re-load the texture if possible
+    loadScreenTexture();
+}
+/*
+function setupControlHandles(controlHandlesElement, onChangeCallback)
+{
+    // Use d3.js to provide user-draggable control points
+    var rectDragBehav = d3.behavior.drag()
+        .on('drag', function(d,i) {
+                d.x += d3.event.dx; d.y += d3.event.dy;
+                d3.select(this).attr('cx',d.x).attr('cy',d.y);
+                onChangeCallback();
+            });
+    
+    var dragT = d3.select(controlHandlesElement).selectAll('circle')
+            .data(controlPoints)
+        .enter().append('circle')
+            .attr('cx', function(d) { return d.x; })
+            .attr('cy', function(d) { return d.y; })
+            .attr('r', 30)
+            .attr('class', 'control-point')
+            .call(rectDragBehav);
+}
+*/
+function addError(message)
+{
+    var container = document.getElementById('errors');
+    var errMessage = document.createElement('div');
+    errMessage.textContent = message;
+    errMessage.className = 'errorMessage';
+    container.appendChild(errMessage);
+}
+
+</script>
+
+</body>
+</html>
