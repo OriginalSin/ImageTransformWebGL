@@ -172,14 +172,12 @@ L.Icon.Default.imagePath = 'http://www.kosmosnimki.ru/lib/geomixer/images';
                 }, {collapsed: false}).addTo(map);
         });
 
-var screenImgElement = null;
-
-var controlPoints = [
-    { x: 100, y: 100 },
-    { x: 300, y: 100 },
-    { x: 100, y: 400 },
-    { x: 300, y: 400 }
-];
+// var controlPoints = [
+    // { x: 100, y: 100 },
+    // { x: 300, y: 100 },
+    // { x: 100, y: 400 },
+    // { x: 300, y: 400 }
+// ];
 
 // The normalised texture co-ordinates of the quad in the screen image.
 var srcPoints;
@@ -191,154 +189,49 @@ var anisoExt = null;
 var screenCanvasElement = document.getElementById('screenCanvas');
 var glOpts = { antialias: true, depth: false, preserveDrawingBuffer: true };
 
-        // var svg = document.getElementById("controlHandles");
+// var imageAttr = null;
 var image = new Image();
-        // image.width = 200;
-        // image.height = 200;
-        // var image = document.getElementById("image");
-var imageAttr = null;
-image.onload = function(ev) {
-	imageAttr = {
-		naturalWidth: image.naturalWidth
-		,naturalHeight: image.naturalHeight
-		,width: image.width
-		,height: image.height
-		,points: []
-	};
 
-var pbbox = map.getPixelBounds();
-screenCanvasElement.width = pbbox.max.x - pbbox.min.x;
-screenCanvasElement.height = pbbox.max.y - pbbox.min.y;
-            //image.draggable = true;
-screenImgElement = image;
-            
-gUtils.syncQualityOptions();
-//var screenCanvasElement = document.getElementById('screenCanvas');
-gl =
-    screenCanvasElement.getContext('webgl', glOpts) ||
-    screenCanvasElement.getContext('experimental-webgl', glOpts);
-if(!gl) {
-    console.log("Your browser doesn't seem to support WebGL.");
-}
-
-// See if we have the anisotropic filtering extension by trying to get
-// if from the WebGL implementation.
-anisoExt =
-    gl.getExtension('EXT_texture_filter_anisotropic') ||
-    gl.getExtension('MOZ_EXT_texture_filter_anisotropic') ||
-    gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
-
-// If we failed, tell the user that their image will look like poo on a
-// stick.
-if(!anisoExt) {
-    // anisotropicFilteringElement.checked = false;
-    // anisotropicFilteringElement.disabled = true;
-    console.log("Your browser doesn't support anisotropic filtering.  Ordinary MIP mapping will be used.");
-}
-
-// Setup the GL context compiling the shader programs and returning the
-// attribute and uniform locations.
-glResources = gUtils.setupGlContext();
-
-            initPoints();
-            //loadScreenTexture();
-            console.log('image', imageAttr);
-            
-        }
-image.crossOrigin = '';
-image.src = './examples/img/aero.jpg';
-
-        // image.dragstart = function(ev) {
-            // if (imageAttr) {
-                // this.style.opacity = '0';  // this / e.target is the source node.
-            // }
-        // }
-        //image.ondragend = function(ev) {
-        var setControlPoints = function() {
-            controlPoints = [];
-            var pbbox = map.getPixelBounds(),
-                min = pbbox.min;
-            for (var i = 0, len = imageAttr.points.length; i < len; i++) {
-                var marker = imageAttr.points[i],
-                    latLng = marker.getLatLng();
-                var pos = marker._map.latLngToLayerPoint(latLng);
-                pos = marker._map.layerPointToContainerPoint(pos);
-                controlPoints.push(pos);
-                //controlPoints.push({x: point.x - min.x, y: point.y - min.y});
-            }
-            imageAttr.screenBbox = pbbox;
-            if (!srcPoints) gUtils.loadScreenTexture();
-            gUtils.redrawImg();
-        }
-        var initPoints = function() {
-            if (imageAttr) {
-                image.style.cursor = 'default';
-                var w = imageAttr.width,
-                    h = imageAttr.height,
-                    pbbox = map.getPixelBounds(),
-                    center = pbbox.getBottomLeft();
-                center.x += (pbbox.max.x - pbbox.min.x - w)/2;
-                center.y -= (pbbox.max.y - pbbox.min.y + h)/2;
-                //controlPoints = [];
-                addPoint({x: 0, y: 0});
-                addCircle(L.point([
-                    center.x,
-                    center.y
-                ]));
-                //controlPoints.push({x: center.x - pbbox.min.x, y: center.y - pbbox.min.y});
-
-                addPoint({x: w, y: 0});
-                addCircle(L.point([
-                    center.x + w,
-                    center.y
-                ]));
-                //controlPoints.push({x: center.x + w - pbbox.min.x, y: center.y - pbbox.min.y});
-
-                addPoint({x: 0, y: h});
-                addCircle(L.point([
-                    center.x,
-                    center.y + h
-                ]));
-                //controlPoints.push({x: center.x - pbbox.min.x, y: center.y + h - pbbox.min.y});
-
-                addPoint({x: w, y: h});
-                addCircle(L.point([
-                    center.x + w,
-                    center.y + h
-                ]));
-                //controlPoints.push({x: center.x + w - pbbox.min.x, y: center.y + h - pbbox.min.y});
-                console.log('ondragend');
-                
-                setControlPoints();
-            }
-        }
-
-        var addPoint = function(ph) {
-            if (imageAttr) {
-                imageAttr.currPoint = ph;
-            }
-        }
-
-        var addCircle = function(point) {
-            if (imageAttr.currPoint) {
-                var opt = imageAttr.currPoint;
-                opt.draggable = true;
-                opt.point = point;
-                var latlng = map.unproject(point);
-                var marker = L.marker(latlng, opt).addTo(map);
-                marker
-                    .on('drag', function(ev1) {
-						setControlPoints();
-                        //console.log('drag', ev1, marker.getLatLng());
-                    });
-                imageAttr.points.push(marker);
-            }
-        }
-        map
-            .on('move', function(ev) {
-				setControlPoints();
-            });
 var gUtils = {
+	_map: map,
+	_img: image,
+	controlPoints: [
+		{ x: 100, y: 100 },
+		{ x: 300, y: 100 },
+		{ x: 100, y: 400 },
+		{ x: 300, y: 400 }
+	],
+	_imageAttr: null,
+	setAnchors: function () {
+		var w = gUtils._img.width,
+			h = gUtils._img.height,
+			pbbox = map.getPixelBounds(),
+			center = pbbox.getBottomLeft();
+
+		center.x += (pbbox.max.x - pbbox.min.x - w)/2;
+		center.y -= (pbbox.max.y - pbbox.min.y + h)/2;
+		gUtils._imageAttr = {
+            screenBbox: pbbox
+			,naturalWidth: gUtils._img.naturalWidth
+			,naturalHeight: gUtils._img.naturalHeight
+			,width: w
+			,height: h
+			,points: [
+                L.marker(map.unproject(L.point([center.x, center.y])), {draggable: true}).on('drag', gUtils._refresh).addTo(map),
+                L.marker(map.unproject(L.point([center.x + w, center.y])), {draggable: true}).on('drag', gUtils._refresh).addTo(map),
+                L.marker(map.unproject(L.point([center.x, center.y + h])), {draggable: true}).on('drag', gUtils._refresh).addTo(map),
+                L.marker(map.unproject(L.point([center.x + w, center.y + h])), {draggable: true}).on('drag', gUtils._refresh).addTo(map)
+			]
+		};
+	},
+	_refresh: function () {
+		gUtils.controlPoints = gUtils._imageAttr.points.map(function(it) {
+			var pos = gUtils._map.latLngToLayerPoint(it.getLatLng());
+			return gUtils._map.layerPointToContainerPoint(pos);
+		}.bind(gUtils));
+		if (!srcPoints) gUtils.loadScreenTexture();
+		gUtils.redrawImg();
+	},
 	getShader: function (type, id) {
 		var source = document.getElementById(id).innerHTML;
 		var shader = gl.createShader(type);
@@ -386,7 +279,7 @@ var gUtils = {
 	loadScreenTexture: function () {
 		if(!gl || !glResources) { return; }
 		
-		var image = screenImgElement;
+		var image = gUtils._img;
 		var extent = { w: image.naturalWidth, h: image.naturalHeight };
 		gl.bindTexture(gl.TEXTURE_2D, glResources.screenTexture);
 		
@@ -396,7 +289,7 @@ var gUtils = {
 		canvas.height = gUtils.nextHighestPowerOfTwo(extent.h);
 		
 		var ctx = canvas.getContext("2d");
-		ctx.drawImage(image, 0, 0, imageAttr.naturalWidth, imageAttr.naturalHeight);
+		ctx.drawImage(image, 0, 0, extent.w, extent.h);
 		
 		// gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
@@ -470,10 +363,10 @@ var gUtils = {
 		// where thecanvas covers [-1,1] x [-1,1]. Note that we have to flip
 		// the y-coord.
 		var dstPoints = [];
-		for(var i=0; i<controlPoints.length; i++) {
+		for(var i = 0, len = gUtils.controlPoints.length; i < len; i++) {
 			dstPoints.push({
-				x: (2 * controlPoints[i].x / vpW) - 1,
-				y: -(2 * controlPoints[i].y / vpH) + 1
+				x: (2 * gUtils.controlPoints[i].x / vpW) - 1,
+				y: -(2 * gUtils.controlPoints[i].y / vpH) + 1
 			});
 		}
 		
@@ -559,6 +452,51 @@ var gUtils = {
 		gUtils.loadScreenTexture();
 	}
 };
+image.onload = function(ev) {
+	// imageAttr = {
+		// naturalWidth: image.naturalWidth
+		// ,naturalHeight: image.naturalHeight
+		// ,width: image.width
+		// ,height: image.height
+		// ,points: []
+	// };
+
+	var pbbox = map.getPixelBounds();
+	screenCanvasElement.width = pbbox.max.x - pbbox.min.x;
+	screenCanvasElement.height = pbbox.max.y - pbbox.min.y;
+				
+	gUtils.syncQualityOptions();
+	gl =
+		screenCanvasElement.getContext('webgl', glOpts) ||
+		screenCanvasElement.getContext('experimental-webgl', glOpts);
+	if(!gl) {
+		console.log("Your browser doesn't seem to support WebGL.");
+	}
+
+	anisoExt =
+		gl.getExtension('EXT_texture_filter_anisotropic') ||
+		gl.getExtension('MOZ_EXT_texture_filter_anisotropic') ||
+		gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+
+	if(!anisoExt) {
+		console.log("Your browser doesn't support anisotropic filtering.  Ordinary MIP mapping will be used.");
+	}
+
+	glResources = gUtils.setupGlContext();
+
+	//initPoints();
+	gUtils.setAnchors();
+	gUtils._refresh();
+	gUtils._map
+		.on('move', function(ev) {
+			gUtils._refresh();
+		});
+
+	// console.log('image', imageAttr);
+	
+}
+image.crossOrigin = '';
+image.src = './examples/img/aero.jpg';
 
 </script>
 

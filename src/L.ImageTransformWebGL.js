@@ -34,9 +34,9 @@ L.ImageTransformWebGL = L.ImageOverlay.extend({
             this._anchors.push(L.latLng(yx));
         }
 
-        if (this._map) {
-            this._reset();
-        }
+        // if (this._map) {
+            // this._reset();
+        // }
     },
 
     _latLngToLayerPoint: function(latlng) {
