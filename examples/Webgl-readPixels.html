@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
-    <script src="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet-src.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+    <script src="http://www.kosmosnimki.ru/lib/geomixer/geomixer-src.js?key=E5FB6CCB5D23B5E119D2F1B26BCC57BD"></script>
+    <link href="http://www.kosmosnimki.ru/lib/geomixer/geomixer.css" rel="stylesheet" />
 
     <script id="shader-fs" type="x-shader/x-fragment">
         precision mediump float;
@@ -339,8 +342,8 @@ image.onload = function(ev) {
     document.body.appendChild(image);
     // run_test(image);
 };
-// image.src = 'img/aero.jpg';
-image.src = 'img/image.jpg';
+ image.src = 'img/aero.jpg';
+//image.src = 'img/image.jpg';
 
 })();
 </script>
