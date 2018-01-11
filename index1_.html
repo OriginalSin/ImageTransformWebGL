@@ -11,7 +11,24 @@
     <script src="../src/L.ImageTransformWebGL.js"></script>
 -->
     <script src="./examples/tools/numeric-1.2.6.js"></script>
-    <script src="./twgl-full.js"></script>
+    <script id="shader-fs" type="x-shader/x-fragment">
+        precision mediump float;
+        varying vec2 vTextureCoord;
+        uniform sampler2D uSampler;
+        void main(void)  {
+            gl_FragColor = texture2D(uSampler, vTextureCoord);
+        }
+    </script>
+     
+    <script id="shader-vs" type="x-shader/x-vertex">
+        attribute vec2 aVertCoord;
+        uniform mat4 uTransformMatrix;
+        varying vec2 vTextureCoord;
+        void main(void) {
+            vTextureCoord = aVertCoord;
+            gl_Position = uTransformMatrix * vec4(aVertCoord, 0.0, 1.0);
+        }
+    </script>
 
     <style>
         html, body, #map, #screenCanvas {
@@ -69,55 +86,6 @@
         }
     </style>
 	<title>GeoMixer API - примеры подключения оперативных данных по пожарам</title>
-
-    <script id="shader-fs" type="x-shader/x-fragment">
-        precision mediump float;
-        varying vec2 vTextureCoord;
-        uniform sampler2D uSampler;
-        void main(void)  {
-            gl_FragColor = texture2D(uSampler, vTextureCoord);
-        }
-    </script>
-     
-    <script id="shader-vs" type="x-shader/x-vertex">
-        attribute vec2 aVertCoord;
-        uniform mat4 uTransformMatrix;
-        varying vec2 vTextureCoord;
-        void main(void) {
-            vTextureCoord = aVertCoord;
-            gl_Position = uTransformMatrix * vec4(aVertCoord, 0.0, 1.0);
-        }
-    </script>
-<script id="vs" type="not-js">
-// we will always pass a 0 to 1 unit quad
-// and then use matrices to manipulate it
-attribute vec4 position;   
-
-uniform mat4 matrix;
-uniform mat4 textureMatrix;
-
-varying vec2 texcoord;
-
-void main () {
-  gl_Position = matrix * position;
-  
-  texcoord = (textureMatrix * position).xy;
-}
-</script>
-<script id="fs" type="not-js">
-precision mediump float;
-
-varying vec2 texcoord;
-uniform sampler2D texture;
-
-void main() {
-  if (texcoord.x < 0.0 || texcoord.x > 1.0 ||
-      texcoord.y < 0.0 || texcoord.y > 1.0) {
-    discard;
-  }
-  gl_FragColor = texture2D(texture, texcoord);
-}
-</script>
 </head>
 
 <body>
@@ -191,268 +159,6 @@ L.Icon.Default.imagePath = 'http://www.kosmosnimki.ru/lib/geomixer_1.2/images/';
 			maxNativeZoom: 17
 		}).addTo(map)
 	}).addTo(map);
-
-var gUtils = {
-	_imageAttr: null,
-    _clipCoords: [
-		[56.301281, 136.90579],
-		[56.150009, 137.83902],
-		[55.788635, 136.60979],
-		[55.639533, 137.53169]
-	],
-	_anchors: [
-		[56.344192, 136.59558],
-		[55.613245, 136.59558],
-		[56.344192, 137.8782],
-		[55.613245, 137.8782]
-	],
-	_refresh: function () {
-console.log('_refresh');
-		gUtils.controlPoints = gUtils._imageAttr.points.map(function(it) {
-			var pos = gUtils._map.latLngToLayerPoint(it.getLatLng());
-			return gUtils._map.layerPointToContainerPoint(pos);
-		}.bind(gUtils));
-		// if (!gUtils.srcPoints) gUtils.loadScreenTexture();
-		gUtils.redrawImg();
-	},
-	setAnchors: function () {
-		var w = gUtils._img.width,
-			h = gUtils._img.height,
-			pbbox = map.getPixelBounds(),
-			// pixelOrigin = map.getPixelOrigin(),
-			center = pbbox.getBottomLeft();
-
-		center.x += (pbbox.max.x - pbbox.min.x - w)/2;
-		center.y -= (pbbox.max.y - pbbox.min.y + h)/2;
-		gUtils._imageAttr = {
-            screenBbox: pbbox
-			,naturalWidth: gUtils._img.naturalWidth
-			,naturalHeight: gUtils._img.naturalHeight
-			,width: w
-			,height: h
-			,points: gUtils._anchors.map(function(it) {
-                var marker = L.marker(it, {draggable: true});
-                marker.on('drag', gUtils._refresh).addTo(map);
-				return marker;
-			})
-		};
-	},
-
-	transformationFromQuadCorners: function (before, after) {
-		 // Return the 8 elements of the transformation matrix which maps
-		 // the points in *before* to corresponding ones in *after*. The
-		 // points should be specified as
-		 // [{x:x1,y:y1}, {x:x2,y:y2}, {x:x3,y:y2}, {x:x4,y:y4}].
-		 
-		 // Note: There are 8 elements because the bottom-right element is
-		 // assumed to be '1'.
-	 
-		var b = numeric.transpose([[
-			after[0].x, after[0].y,
-			after[1].x, after[1].y,
-			after[2].x, after[2].y,
-			after[3].x, after[3].y ]]);
-		
-		var A = [];
-		for(var i=0; i<before.length; i++) {
-			A.push([
-				before[i].x, 0, -after[i].x*before[i].x,
-				before[i].y, 0, -after[i].x*before[i].y, 1, 0]);
-			A.push([
-				0, before[i].x, -after[i].y*before[i].x,
-				0, before[i].y, -after[i].y*before[i].y, 0, 1]);
-		}
-		
-		// Solve for T and return the elements as a single array
-		return numeric.transpose(numeric.dot(numeric.inv(A), b))[0];
-	},
-	nextHighestPowerOfTwo: function (x) {
-		--x;
-		for (var i = 1; i < 32; i <<= 1) {
-			x = x | x >> i;
-		}
-		return x + 1;
-	}
-};
-	
-	var gl = document.getElementById('screenCanvas').getContext("webgl");
-	var bufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);
-	const m4 = twgl.m4;
-	var programInfo = twgl.createProgramInfo(gl, ["vs", "fs"]);
-	const tex = twgl.createTexture(gl, {
-      // a power of 2 image
-		src: 'examples/img/image.jpg', mag: gl.NEAREST,
-	}, function(arg) {
-		var texture2d = arguments[1];
-		var img = arguments[2];
-		console.log('createTexture', arguments)
-		startRendering(img);
-	}
-	);
-	
-	function startRendering(img) {
-		var w = img.naturalWidth / gUtils.nextHighestPowerOfTwo(img.naturalWidth), h = img.naturalHeight / gUtils.nextHighestPowerOfTwo(img.naturalHeight);
-		
-		gUtils.srcPoints = [
-			{ x: 0, y: 0 }, // top-left
-			{ x: w, y: 0 }, // top-right
-			{ x: 0, y: h }, // bottom-left
-			{ x: w, y: h }  // bottom-right
-		];
-
-	  requestAnimationFrame(render);
-	  
-	  function render(time) {
-		time *= 0.001;
-		
-		twgl.resizeCanvasToDisplaySize(gl.canvas);
-		gl.viewport(0, 0, gl.canvas.width, gl.canvas.height); 
-		
-		drawImage(
-		  gl.canvas.width, gl.canvas.height,
-		  tex, img.width, img.height,
-		  Math.sin(time) * 50, Math.sin(time * 1.1) * 50);
-		//requestAnimationFrame(render);
-	  };
-	};
-	
-// we pass in texWidth and texHeight because unlike images
-// we can't look up the width and height of a texture
-
-// we pass in targetWidth and targetHeight to tell it
-// the size of the thing we're drawing too. We could look 
-// up the size of the canvas with gl.canvas.width and
-// gl.canvas.height but maybe we want to draw to a framebuffer
-// etc.. so might as well pass those in.
-
-// srcX, srcY, srcWidth, srcHeight are in pixels 
-// computed from texWidth and texHeight
-
-// dstX, dstY, dstWidth, dstHeight are in pixels
-// computed from targetWidth and targetHeight
-function drawImage(
-    targetWidth, targetHeight,
-    tex, texWidth, texHeight,
-    srcX, srcY, srcWidth, srcHeight,
-    dstX, dstY, dstWidth, dstHeight) {
-  if (srcWidth === undefined) {
-    srcWidth = texWidth;
-    srcHeight = texHeight;
-  }
-  if (dstX === undefined) {
-    dstX = srcX;
-    dstY = srcY;
-    srcX = 0;
-    srcY = 0;
-  }
-  if (dstWidth === undefined) {
-    dstWidth = srcWidth;
-    dstHeight = srcHeight;
-  }      
-
-	// Get the transform
-	var vpW = gUtils._canvas.width;	var vpH = gUtils._canvas.height;
-	var dstPoints = gUtils._imageAttr.points.map(function(it) {
-		var pos = gUtils._map.layerPointToContainerPoint(gUtils._map.latLngToLayerPoint(it.getLatLng()));
-		return {
-			x: (2 * pos.x / vpW) - 1,
-			y: -(2 * pos.y / vpH) + 1
-		};
-	}.bind(gUtils));
-	var v = gUtils.transformationFromQuadCorners(gUtils.srcPoints, dstPoints);
-		  // If 'v' is the vector of transform coefficients, we want to use
-			// the following matrix:
-		
-			// [v[0], v[3],   0, v[6]],
-			// [v[1], v[4],   0, v[7]],
-			// [   0,    0,   1,    0],
-			// [v[2], v[5],   0,    1]
-		
-			// which must be unravelled and sent to uniformMatrix4fv() in *column-major*
-			// order. Hence the mystical ordering of the array below.
-		
-		gl.uniformMatrix4fv(
-			gUtils._glResources.transMatUniform,
-			false, [
-				v[0], v[1],    0, v[2],
-				v[3], v[4],    0, v[5],
-				   0,    0,    0,    0,
-				v[6], v[7],    0,    1
-			]);
-
-  var mat  = m4.identity();
-  var tmat = m4.identity();
-  
-  var uniforms = {
-    matrix: mat,
-    textureMatrix: tmat,
-    texture: tex,
-  };
-
-  // these adjust the unit quad to generate texture coordinates
-  // to select part of the src texture
-
-  // NOTE: no check is done that srcX + srcWidth go outside of the
-  // texture or are in range in any way. Same for srcY + srcHeight
-
-  m4.translate(tmat, [srcX / texWidth, srcY / texHeight, 0], tmat);
-  m4.scale(tmat, [srcWidth / texWidth, srcHeight / texHeight, 1], tmat);
-
-  // these convert from pixels to clip space
-  m4.ortho(0, targetWidth, targetHeight, 0, -1, 1, mat)
-
-  // these move and scale the unit quad into the size we want
-  // in the target as pixels
-  m4.translate(mat, [dstX, dstY, 0], mat);
-  m4.scale(mat, [dstWidth, dstHeight, 1], mat);
-
-  gl.useProgram(programInfo.program);
-  twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
-  twgl.setUniforms(programInfo, uniforms);
-  twgl.drawBufferInfo(gl, gl.TRIANGLES, bufferInfo);
-  
-}
-/*			// Record normalised height and width.
-		
-		gUtils.srcPoints = [
-			{ x: 0, y: 0 }, // top-left
-			{ x: w, y: 0 }, // top-right
-			{ x: 0, y: h }, // bottom-left
-			{ x: w, y: h }  // bottom-right
-		];
-		// setup the vertex buffer with the source points
-		var vertices = [];
-		for(var i=0, len = gUtils.srcPoints.length; i<len; i++) {
-			vertices.push(gUtils.srcPoints[i].x);
-			vertices.push(gUtils.srcPoints[i].y);
-		}
-		gl.bindBuffer(gl.ARRAY_BUFFER, gUtils._glResources.vertexBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-
-
-  const arrays = {
-    position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
-  };
-  const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays);
-
-  function render(time) {
-    twgl.resizeCanvasToDisplaySize(gl.canvas);
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-
-    const uniforms = {
-      time: time * 0.001,
-      resolution: [gl.canvas.width, gl.canvas.height],
-    };
-
-    gl.useProgram(programInfo.program);
-    twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
-    twgl.setUniforms(programInfo, uniforms);
-    twgl.drawBufferInfo(gl, bufferInfo);
-
-    requestAnimationFrame(render);
-  }
-  requestAnimationFrame(render);
-
 
 // The normalised texture co-ordinates of the quad in the screen image.
 var gl = null;
@@ -733,17 +439,17 @@ console.log('_refresh');
 		gl.enableVertexAttribArray(gUtils._glResources.vertAttrib);
 		gl.vertexAttribPointer(gUtils._glResources.vertAttrib, 2, gl.FLOAT, false, 0, 0);
 		
-		  // If 'v' is the vector of transform coefficients, we want to use
-			// the following matrix:
+		/*  If 'v' is the vector of transform coefficients, we want to use
+			the following matrix:
 		
-			// [v[0], v[3],   0, v[6]],
-			// [v[1], v[4],   0, v[7]],
-			// [   0,    0,   1,    0],
-			// [v[2], v[5],   0,    1]
+			[v[0], v[3],   0, v[6]],
+			[v[1], v[4],   0, v[7]],
+			[   0,    0,   1,    0],
+			[v[2], v[5],   0,    1]
 		
-			// which must be unravelled and sent to uniformMatrix4fv() in *column-major*
-			// order. Hence the mystical ordering of the array below.
-		
+			which must be unravelled and sent to uniformMatrix4fv() in *column-major*
+			order. Hence the mystical ordering of the array below.
+		*/
 		gl.uniformMatrix4fv(
 			gUtils._glResources.transMatUniform,
 			false, [
@@ -761,13 +467,15 @@ console.log('_refresh');
 	},
 
 	transformationFromQuadCorners: function (before, after) {
-		 // Return the 8 elements of the transformation matrix which maps
-		 // the points in *before* to corresponding ones in *after*. The
-		 // points should be specified as
-		 // [{x:x1,y:y1}, {x:x2,y:y2}, {x:x3,y:y2}, {x:x4,y:y4}].
+		/*
+		 Return the 8 elements of the transformation matrix which maps
+		 the points in *before* to corresponding ones in *after*. The
+		 points should be specified as
+		 [{x:x1,y:y1}, {x:x2,y:y2}, {x:x3,y:y2}, {x:x4,y:y4}].
 		 
-		 // Note: There are 8 elements because the bottom-right element is
-		 // assumed to be '1'.
+		 Note: There are 8 elements because the bottom-right element is
+		 assumed to be '1'.
+		*/
 	 
 		var b = numeric.transpose([[
 			after[0].x, after[0].y,
@@ -818,7 +526,7 @@ gUtils._img.onload = function(ev) {
 }
 gUtils._img.crossOrigin = '';
 gUtils._img.src = './examples/img/image.jpg';
-*/
+
 </script>
 
 </body>
