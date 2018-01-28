@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
-    <script src="http://www.kosmosnimki.ru/lib/geomixer_1.3/geomixer-src.js?key=E5FB6CCB5D23B5E119D2F1B26BCC57BD"></script>
-    <link href="http://www.kosmosnimki.ru/lib/geomixer_1.3/geomixer.css" rel="stylesheet" />
+    <script src="//www.kosmosnimki.ru/lib/geomixer_1.3/geomixer-src.js?key=E5FB6CCB5D23B5E119D2F1B26BCC57BD"></script>
+    <link href="//www.kosmosnimki.ru/lib/geomixer_1.3/geomixer.css" rel="stylesheet" />
 
     <!--
     <script src="../src/L.ImageTransformWebGL.js"></script>
@@ -44,7 +44,7 @@
 	<div id="map"></div>
 
 <script>
-L.Icon.Default.imagePath = 'http://www.kosmosnimki.ru/lib/geomixer_1.2/images/';
+//L.Icon.Default.imagePath = '//www.kosmosnimki.ru/lib/geomixer_1.2/images/';
 	var map = new L.Map('map', {
 		center: new L.LatLng(56, 137.23),
 		zoom: 9
@@ -52,7 +52,7 @@ L.Icon.Default.imagePath = 'http://www.kosmosnimki.ru/lib/geomixer_1.2/images/';
 
 	var LayersControl = L.control.layers({
 		Google: L.tileLayer('//mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'),
-		Map: L.tileLayer.Mercator('http://vec03.maps.yandex.net/tiles?l=map&v=17.09.21-1&x={x}&y={y}&z={z}&scale=1&lang=ru_RU', {
+		Map: L.tileLayer.Mercator('//vec03.maps.yandex.net/tiles?l=map&v=17.09.21-1&x={x}&y={y}&z={z}&scale=1&lang=ru_RU', {
 			maxZoom: 21,
 			maxNativeZoom: 17
 		}).addTo(map)
