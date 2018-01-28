@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
-    <script src="http://www.kosmosnimki.ru/lib/geomixer_1.2/geomixer-src.js?key=E5FB6CCB5D23B5E119D2F1B26BCC57BD"></script>
-    <link href="http://www.kosmosnimki.ru/lib/geomixer_1.2/geomixer.css" rel="stylesheet" />
+    <script src="http://www.kosmosnimki.ru/lib/geomixer_1.3/geomixer-src.js?key=E5FB6CCB5D23B5E119D2F1B26BCC57BD"></script>
+    <link href="http://www.kosmosnimki.ru/lib/geomixer_1.3/geomixer.css" rel="stylesheet" />
 
     <!--
     <script src="../src/L.ImageTransformWebGL.js"></script>
@@ -36,121 +36,19 @@
             width: 100%;
             margin: 0px;
         }
-        #controls {
-            position: absolute;
-			right: 20px;
-			bottom: 240px;
-			z-index: 2;
-			background-color: #ffffff;
-			border-radius: 5px;
-            box-shadow: 0 1px 7px rgba(0,0,0,0.65);
-        }
-        
-        #controls button {
-            border-radius: 5px;
-            
-        }
-        
-        #controls > div{
-            padding: 6px;
-        }
-        #screenCanvas {
-			z-index: 1000;
-            position: absolute;
-            left: 0px;
-            top: 0px;
-            pointer-events: none;
-            opacity: 1;
-        }
-
-        #imageCont {
-            position: absolute;
-            bottom: 25px;
-            right: 5px;
-			z-index: 1;
-			background-color: #ffffff;
-			border-radius: 5px;
-            box-shadow: 0 1px 7px rgba(0,0,0,0.65);
-        }
-        #image {
-			width: 200px;
-			height: 200px;
-            padding: 5px;
-            padding-bottom: 0px;
-            cursor: move;
-        }
-        #controlHandles {
-            position: absolute;
-            left: 0px;
-            pointer-events: none;
-        }
     </style>
 	<title>GeoMixer API - примеры подключения оперативных данных по пожарам</title>
 </head>
 
 <body>
 	<div id="map"></div>
-    <canvas id="screenCanvas"></canvas>
 
 <script>
 L.Icon.Default.imagePath = 'http://www.kosmosnimki.ru/lib/geomixer_1.2/images/';
 	var map = new L.Map('map', {
-		layers: [],
-		crs: L.CRS.EPSG3395,
 		center: new L.LatLng(56, 137.23),
-		attributionControl: false,
-		zoomControl: false,
 		zoom: 9
 	});
-	map
-		.addControl(L.control.gmxZoom())       // default options = {zoomslider: true}
-		.addControl(L.control.gmxBottom())
-		.addControl(L.control.gmxLocation())   // default options = {position: 'bottomright'}
-		.addControl(L.control.gmxCopyright())  // default options = {position: 'bottomleft'}
-		.addControl(L.control.gmxHide())
-		.addControl(L.control.gmxCenter())      // default options = {color: '#216b9c'}
-		.addControl(new L.Control.gmxIcon({
-			id: 'boxzoom',
-			toggle: true,
-			title: L.gmxLocale.addText({
-				'eng': {
-					'boxZoom': 'BoxZoom'
-				},
-				'rus': {
-					'boxZoom': 'Увеличение'
-				}
-			}).getText('boxZoom'),
-			onAdd: function (control) {
-				//console.log('onAdd', this, arguments);
-				var map = control._map,
-					_onMouseDown = map.boxZoom._onMouseDown;
-				map.boxZoom._onMouseDown = function (e) {
-					_onMouseDown.call(map.boxZoom, {
-						clientX: e.clientX,
-						clientY: e.clientY,
-						which: 1,
-						shiftKey: true
-					});
-				}
-				map.on('boxzoomend', function () {
-					map.dragging.enable();
-					map.boxZoom.removeHooks();
-					control.setActive(false);
-				});
-			},
-			stateChange: function (control) {
-				console.log('boxzoom', control.options.isActive);
-				var map = control._map;
-				if (control.options.isActive) {
-					map.dragging.disable();
-					map.boxZoom.addHooks();
-				} else {
-					map.dragging.enable();
-					map.boxZoom.removeHooks();
-				}
-			}
-		}))
-		.addControl(new L.Control.gmxDrawing());
 
 	var LayersControl = L.control.layers({
 		Google: L.tileLayer('//mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'),
@@ -159,14 +57,17 @@ L.Icon.Default.imagePath = 'http://www.kosmosnimki.ru/lib/geomixer_1.2/images/';
 			maxNativeZoom: 17
 		}).addTo(map)
 	}).addTo(map);
-
+	
+var canvas = L.DomUtil.create('canvas', '', map._controlContainer);
+var overlayPane = map.getPane('overlayPane');
+overlayPane.insertBefore(canvas, overlayPane.firstChild);
 // The normalised texture co-ordinates of the quad in the screen image.
 var gl = null;
 
 var gUtils = {
 	_map: map,
-	_img: new Image(),
-	_canvas: document.getElementById('screenCanvas'),
+	_img: null,
+	_canvas: canvas,
 	_imageAttr: null,
 	_glOpts: { antialias: true, depth: false, preserveDrawingBuffer: true },
 	_qualityOptions: {},
@@ -174,29 +75,6 @@ var gUtils = {
 	_glResources: null,
 	srcPoints: null,
 	controlPoints: null,
-	// controlPoints: [
-		// { x: 100, y: 100 },
-		// { x: 300, y: 100 },
-		// { x: 100, y: 400 },
-		// { x: 300, y: 400 }
-	// ],
-	// _anchors: [
-		// [60.55, 30.53],
-		// [60.56, 30.53],
-		// [60.55, 30.54],
-		// [60.56, 30.54]
-	// ],
-	// _anchors: [
-		// [56.344192, 136.59558],
-		// [56.344192, 137.8782],
-		// [55.613245, 137.8782],
-		// [55.613245, 136.59558]
-	// ],
-        // var clipCoords = [[56.301281, 136.90579],[56.150009, 137.83902],[55.639533, 137.53169],[55.788635, 136.60979]];
-			// { x: 0, y: 0 }, // top-left
-			// { x: w, y: 0 }, // top-right
-			// { x: 0, y: h }, // bottom-left
-			// { x: w, y: h }  // bottom-right
     _clipCoords: [
 		[56.301281, 136.90579],
 		[56.150009, 137.83902],
@@ -204,10 +82,10 @@ var gUtils = {
 		[55.639533, 137.53169]
 	],
 	_anchors: [
-		[56.344192, 136.59558],
-		[55.613245, 136.59558],
-		[56.344192, 137.8782],
-		[55.613245, 137.8782]
+		[56.344192, 136.59558],	// top-left
+		[55.613245, 136.59558],	// top-right
+		[55.613245, 137.8782],	// bottom-right
+		[56.344192, 137.8782]	// bottom-left
 	],
 	createGL: function (canvas) {
 		var pbbox = map.getPixelBounds();
@@ -246,33 +124,35 @@ var gUtils = {
 
 		center.x += (pbbox.max.x - pbbox.min.x - w)/2;
 		center.y -= (pbbox.max.y - pbbox.min.y + h)/2;
+		
+		if (gUtils._imageAttr) {
+			gUtils._imageAttr.drawAnchors.remove();
+		}
+
 		gUtils._imageAttr = {
             screenBbox: pbbox
 			,naturalWidth: gUtils._img.naturalWidth
 			,naturalHeight: gUtils._img.naturalHeight
 			,width: w
 			,height: h
-			
-			,points: gUtils._anchors.map(function(it) {
-                var marker = L.marker(it, {draggable: true});
-
-                marker.on('drag', gUtils._refresh).addTo(map);
-				return marker;
-			})
-			// ,points: [
-                // L.marker(map.unproject(L.point([center.x, center.y])), {draggable: true}).on('drag', gUtils._refresh).addTo(map),
-                // L.marker(map.unproject(L.point([center.x + w, center.y])), {draggable: true}).on('drag', gUtils._refresh).addTo(map),
-                // L.marker(map.unproject(L.point([center.x, center.y + h])), {draggable: true}).on('drag', gUtils._refresh).addTo(map),
-                // L.marker(map.unproject(L.point([center.x + w, center.y + h])), {draggable: true}).on('drag', gUtils._refresh).addTo(map)
-			// ]
+			,drawAnchors: map.gmxDrawing.add(L.polygon(gUtils._anchors))
 		};
+		gUtils._imageAttr.drawAnchors.on('edit', function(ev) {
+			//console.log('kkk', ev);
+			gUtils._refresh();
+		});
+
 	},
 	_refresh: function () {
-console.log('_refresh');
-		gUtils.controlPoints = gUtils._imageAttr.points.map(function(it) {
-			var pos = gUtils._map.latLngToLayerPoint(it.getLatLng());
-			return gUtils._map.layerPointToContainerPoint(pos);
-		}.bind(gUtils));
+		var map = gUtils._map,
+			coords = gUtils._imageAttr.drawAnchors.getLayers()[0].points.getLatLngs()[0];
+		gUtils.controlPoints = [
+			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[0])),
+			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[1])),
+			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[3])),
+			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[2]))
+		];
+		//console.log('_refresh', gUtils.controlPoints);
 		if (!gUtils.srcPoints) gUtils.loadScreenTexture();
 		gUtils.redrawImg();
 	},
@@ -506,26 +386,25 @@ console.log('_refresh');
 		gUtils.loadScreenTexture();
 	}
 };
-gUtils._img.onload = function(ev) {
-	// imageAttr = {
-		// naturalWidth: image.naturalWidth
-		// ,naturalHeight: image.naturalHeight
-		// ,width: image.width
-		// ,height: image.height
-		// ,points: []
-	// };
-	gUtils.createGL(gUtils._canvas);
 
-	gUtils._map
-		.on('move', function(ev) {
-			gUtils._refresh();
-		});
+var loadImage = function() {
+	gUtils._img = new Image();
 
-	// console.log('image', imageAttr);
-	
-}
-gUtils._img.crossOrigin = '';
-gUtils._img.src = './examples/img/image.jpg';
+	gUtils._img.onload = function(ev) {
+		gUtils.createGL(gUtils._canvas);
+		gUtils._map.on('move', gUtils._refresh);
+	}
+	gUtils._img.crossOrigin = '';
+	gUtils._img.src = './examples/img/image.jpg';
+};
+
+gUtils._map
+	.on('resize', function(ev) {
+		gUtils._map.off('move', gUtils._refresh);
+		gUtils.srcPoints = null;
+		loadImage();
+	});
+loadImage();
 
 </script>
 
