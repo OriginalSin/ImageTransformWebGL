@@ -58,9 +58,10 @@
 		}).addTo(map)
 	}).addTo(map);
 	
-var canvas = L.DomUtil.create('canvas', '', map._controlContainer);
+var canvas = L.DomUtil.create('canvas', '');
 var overlayPane = map.getPane('overlayPane');
 overlayPane.insertBefore(canvas, overlayPane.firstChild);
+
 // The normalised texture co-ordinates of the quad in the screen image.
 var gl = null;
 
@@ -88,10 +89,6 @@ var gUtils = {
 		[56.344192, 137.8782]	// bottom-left
 	],
 	createGL: function (canvas) {
-		var pbbox = map.getPixelBounds();
-		canvas.width = pbbox.max.x - pbbox.min.x;
-		canvas.height = pbbox.max.y - pbbox.min.y;
-		
 		gUtils.syncQualityOptions();
 		gl =
 			canvas.getContext('webgl', gUtils._glOpts) ||
@@ -114,6 +111,15 @@ var gUtils = {
 		//initPoints();
 		gUtils.setAnchors();
 		gUtils._refresh();
+	},
+
+	syncQualityOptions: function () {
+		gUtils._qualityOptions.anisotropicFiltering = 
+		gUtils._qualityOptions.mipMapping = 
+		gUtils._qualityOptions.linearFiltering = true;
+		
+		// re-load the texture if possible
+		gUtils.loadScreenTexture();
 	},
 	setAnchors: function () {
 		var w = gUtils._img.width,
@@ -142,19 +148,6 @@ var gUtils = {
 			gUtils._refresh();
 		});
 
-	},
-	_refresh: function () {
-		var map = gUtils._map,
-			coords = gUtils._imageAttr.drawAnchors.getLayers()[0].points.getLatLngs()[0];
-		gUtils.controlPoints = [
-			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[0])),
-			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[1])),
-			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[3])),
-			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[2]))
-		];
-		//console.log('_refresh', gUtils.controlPoints);
-		if (!gUtils.srcPoints) gUtils.loadScreenTexture();
-		gUtils.redrawImg();
 	},
 	getShader: function (type, id) {
 		var source = document.getElementById(id).innerHTML;
@@ -256,8 +249,8 @@ var gUtils = {
 			{ x: 0, y: h }, // bottom-left
 			{ x: w, y: h }  // bottom-right
 		];
-		var	pixelOrigin = map.getPixelOrigin(),
-			wh = L.point([w, h]);
+		// var	pixelOrigin = map.getPixelOrigin(),
+			// wh = L.point([w, h]);
 		// gUtils.srcPoints = gUtils._clipCoords.map(function(it) {
 			// var p = map.project(it).subtract(pixelOrigin),
 				// wh = L.point([gUtils.nextHighestPowerOfTwo(p.x), gUtils.nextHighestPowerOfTwo(p.y)]);
@@ -285,6 +278,27 @@ var gUtils = {
 			x = x | x >> i;
 		}
 		return x + 1;
+	},
+	_refresh: function () {
+		var map = gUtils._map,
+			coords = gUtils._imageAttr.drawAnchors.getLayers()[0].points.getLatLngs()[0];
+		gUtils.controlPoints = [
+			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[0])),
+			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[1])),
+			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[3])),
+			map.layerPointToContainerPoint(map.latLngToLayerPoint(coords[2]))
+		];
+		//console.log('_refresh', gUtils.controlPoints);
+		if (!gUtils.srcPoints) gUtils.loadScreenTexture();
+
+		var pbbox = map.getPixelBounds(),
+			panePos = map._getMapPanePos();
+		gUtils._canvas.width = pbbox.max.x - pbbox.min.x;
+		gUtils._canvas.height = pbbox.max.y - pbbox.min.y;
+		gUtils._canvas.style.left = -panePos.x + 'px';
+		gUtils._canvas.style.top = -panePos.y + 'px';
+
+		gUtils.redrawImg();
 	},
 
 	redrawImg: function () {
@@ -375,15 +389,6 @@ var gUtils = {
 		
 		// Solve for T and return the elements as a single array
 		return numeric.transpose(numeric.dot(numeric.inv(A), b))[0];
-	},
-
-	syncQualityOptions: function () {
-		gUtils._qualityOptions.anisotropicFiltering = 
-		gUtils._qualityOptions.mipMapping = 
-		gUtils._qualityOptions.linearFiltering = true;
-		
-		// re-load the texture if possible
-		gUtils.loadScreenTexture();
 	}
 };
 
@@ -400,9 +405,9 @@ var loadImage = function() {
 
 gUtils._map
 	.on('resize', function(ev) {
-		gUtils._map.off('move', gUtils._refresh);
-		gUtils.srcPoints = null;
-		loadImage();
+		//gUtils._map.off('move', gUtils._refresh);
+		//gUtils.srcPoints = null;
+		gUtils._refresh();
 	});
 loadImage();
 
