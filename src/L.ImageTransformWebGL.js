@@ -70,33 +70,79 @@ var ext = L.extend({
         }
 
         if (this._map) {
+			this._getMatrix4fv();
             this._redraw();
         }
     },
 
     setClip: function (clip) {
 		this.options.clip = clip;
-		this._setTrianglesIndex(this.options.clip);
-		this._redraw();
+
+        if (this._map) {
+			if (!this._matrix4fv) { this._getMatrix4fv(); }
+			this._setTrianglesIndex(this.options.clip);
+			this._getClipTriangles();
+			this._redraw();
+		}
+	},
+
+    getClip: function () {
+		if (this._pixelClipPoints) {
+			this.options.clip = this._getLatLngsFromPixelPoints(this._pixelClipPoints);
+		}
+        return this.options.clip;
+	},
+
+    _getMatrix4fv: function () {
+		var map = this._map,
+			w = 2 / this._canvas.width, h = 2 / this._canvas.height,
+			px = this._anchors.map(function(it) {
+				var p = map.layerPointToContainerPoint(map.latLngToLayerPoint(it));
+				return [w * p.x - 1, 1 - h * p.y];
+			}.bind(this));
+
+        var m = L.gmx.WebGL.getMatrix4fv(this._srcPoints, [
+			px[3][0], px[3][1],		// bl
+			px[2][0], px[2][1],		// br
+			px[0][0], px[0][1],		// tl
+			px[1][0], px[1][1]		// tr
+		]);
+        this._matrix4fv = m.matrix4fv;
+        this._matrix3d = m.matrix3d;
+        this._matrix3dInverse = m.invMatrix;
+		return this.matrix4fv;
+	},
+
+    _getLatLngsFromPixelPoints: function (pixels) {
+		var map = this._map,
+			w = 2 / this._canvas.width, h = 2 / this._canvas.height;
+		return pixels.map(function(it) {
+			var p = L.ImageTransform.Utils.project(this._matrix3d, it[0], it[1]);
+			return map.layerPointToLatLng(L.point((p[0] + 1)/w, (1 - p[1])/h));
+		}.bind(this));
+	},
+
+    _getPixelPointsFromLatLngs: function (latlngs) {
+		var map = this._map,
+			w = 2 / this._canvas.width, h = 2 / this._canvas.height;
+		return latlngs.map(function(it) {
+			var p = map.layerPointToContainerPoint(map.latLngToLayerPoint(it)),
+				px = L.ImageTransform.Utils.project(this._matrix3dInverse, w * p.x - 1, 1 - h * p.y);
+			return [px[0], px[1]];
+		}.bind(this));
 	},
 
     _getClipTriangles: function () {
-		var map = this._map,
-			w = 2 / this._canvas.width, h = 2 / this._canvas.height,
-			vertices = [],
-			clip = this.options.clip || this._anchors,
-			p, pixel,
-			points = clip.map(function(it) {
-				p = map.layerPointToContainerPoint(map.latLngToLayerPoint(it));
-				pixel = L.ImageTransform.Utils.project(this._matrix3dInverse, w * p.x - 1, 1 - h * p.y);
-				return [pixel[0], pixel[1]];
-			}.bind(this));
+		var vertices = [],
+			points = this._getPixelPointsFromLatLngs(this.options.clip || this._anchors);
 
+		this._pixelClipPoints = points;
         for (var i = 0, len = this._trianglesIndex.length; i < len; i++) {
-            p = points[this._trianglesIndex[i]];
+            var p = points[this._trianglesIndex[i]];
             vertices.push(p[0], p[1]);
         }
-		return new Float32Array(vertices);
+		this._vertices = new Float32Array(vertices);
+		return this._vertices;
 	},
 
     _setTrianglesIndex: function (coords) {
@@ -242,28 +288,10 @@ var ext = L.extend({
         return x + 1;
     },
 
-    _getMatrix4fv: function () {
-		var map = this._map,
-			w = 2 / this._canvas.width, h = 2 / this._canvas.height,
-			points = this._anchors.map(function(it) {
-				var p = map.layerPointToContainerPoint(map.latLngToLayerPoint(it));
-				return [w * p.x - 1, 1 - h * p.y];
-			}.bind(this));
-
-        var m = L.gmx.WebGL.getMatrix4fv(this._srcPoints, [
-			points[3][0], points[3][1],		// bl
-			points[2][0], points[2][1],		// br
-			points[0][0], points[0][1],		// tl
-			points[1][0], points[1][1]		// tr
-		]);
-        this._matrix3dInverse = m.invMatrix;
-		return m.matrix4fv;
-	},
-
     _setClip: function () {
 		var gl = this._gl;
 		gl.bindBuffer(gl.ARRAY_BUFFER, this._glResources.vertexBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, this._getClipTriangles(), gl.STATIC_DRAW);
+		gl.bufferData(gl.ARRAY_BUFFER, this._vertices, gl.STATIC_DRAW);
     },
 
     _redraw: function () {
@@ -285,7 +313,7 @@ var ext = L.extend({
 		gl.bindTexture(gl.TEXTURE_2D, this._glResources.screenTexture);
 		gl.uniform1i(this._glResources.samplerUniform, 0);
 
-		gl.uniformMatrix4fv(this._glResources.transMatUniform, false, this._getMatrix4fv());
+		gl.uniformMatrix4fv(this._glResources.transMatUniform, false, this._matrix4fv);
 		if (this._trianglesIndex.length) {
 			this._setClip();
 		}
@@ -308,15 +336,27 @@ if (L.ImageTransform.Utils) {
 			s[4], s[5], d[4], d[5],	// bottom-left
 			s[6], s[7], d[6], d[7]	// bottom-right
 		);
+		var matrix3d = m.slice();
 		for (var i = 0; i !== 9; ++i) { m[i] = m[i] / m[8]; }
+		var matrix4fv = [
+			m[0], m[3],    0, m[6],
+			m[1], m[4],    0, m[7],
+			   0,    0,    0,    0,
+			m[2], m[5],    0,    1
+		];
 		return {
-			matrix4fv: [
-				m[0], m[1],    0, m[6],
-				m[3], m[4],    0, m[7],
-				   0,    0,    0,    0,
-				m[2], m[5],    0,    1
-			],
-			invMatrix: L.ImageTransform.Utils.adj(m)
+			// matrix4fv: [
+				// m[0], m[1],    0, m[6],
+				// m[3], m[4],    0, m[7],
+				   // 0,    0,    0,    0,
+				// m[2], m[5],    0,    1
+			// ],
+			// matrix3d: matrix3d,
+			matrix3d: m,
+			// matrix3d: matrix4fv,
+			// invMatrix: L.ImageTransform.Utils.adj(matrix3d),
+			invMatrix: L.ImageTransform.Utils.adj(m),
+			matrix4fv: matrix4fv
 		};
 	};
 }

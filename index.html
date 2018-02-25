@@ -55,6 +55,7 @@
 			disableSetClip: false
 		});
 
+	var drawClip;
 	var drawAnchors = new L.GmxDrawing.Feature(map.gmxDrawing,
 		L.polygon(anchors, {color: 'red'}),
 		{editable: true, disableAddPoints: true, maxPoints: 4, type: 'Polygon', lineStyle: {color: 'blue'}, pointStyle: {shape: 'box'}}
@@ -62,6 +63,7 @@
 		var latlngs = drawAnchors.getLayers()[0].points.getLatLngs()[0];
 		imageTransform.setOpacity(0.5);
 		imageTransform.setAnchors(latlngs);
+        drawClip.rings[0].ring.setLatLngs(imageTransform.getClip());
 	})
 	.on('editstop', function() {
 		imageTransform.setOpacity(1);
@@ -74,7 +76,7 @@
 	layersControl.addOverlay(overlay, 'imageTransform');
 
 	if (imageTransform.options.clip) {
-		var drawClip = new L.GmxDrawing.Feature(map.gmxDrawing, L.polygon(clip), {editable: true, type: 'Polygon', lineStyle: {color: 'red'}, pointStyle: {color: 'red'}});
+		drawClip = new L.GmxDrawing.Feature(map.gmxDrawing, L.polygon(clip), {editable: true, type: 'Polygon', lineStyle: {color: 'red'}, pointStyle: {color: 'red'}});
 		drawClip.on('edit', function() {
 			imageTransform.setClip(drawClip.getLayers()[0].points.getLatLngs()[0]);
 		});
