@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Leaflet Image Transform Interactive Example</title>
+	<meta charset="utf-8" />
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="css/examples.css" />
+    <script src="//www.kosmosnimki.ru/lib/geomixer_1.3/geomixer-src1.js?key=E5FB6CCB5D23B5E119D2F1B26BCC57BD"></script>
+    <link href="//www.kosmosnimki.ru/lib/geomixer_1.3/geomixer.css" rel="stylesheet" />
+
+    <script src="../src/L.ImageTransformWebGL.js"></script>
+    <script src="../../gmxDrawing/src/L.gmxDrawing.Feature.js"></script>
+</head>
+<body>
+	<div id="map"></div>
+	<script>
+		var quickLooks = [
+		{
+			anchorsLatLngs: [[47.20627509437822, 37.60396957397461], [47.20802436605374, 37.73983955383301], [47.14804977458752, 37.73271560668945], [47.14495586297567, 37.59993553161621]],	// [lat, lng]
+			clipGeoJSON: {
+				type: 'MultiPolygon',
+				coordinates: [
+					[
+						[[37.70122338120615,47.206343977765634],[37.59645260839524,47.191123009948875],[37.59605312758839,47.20628386519843],[37.70122338120615,47.206343977765634]]
+					],
+					[
+						[[37.59706103733718,47.16803047231103],[37.64263320052125,47.15858258486256],[37.67685038901948,47.193445372693404],[37.71232674605145,47.2076359237855],[37.71241765555821,47.20763696123541],[37.73495503856385,47.203129477088574],[37.74011990228989,47.19150857168657],[37.72397969191706,47.16439308156757],[37.71042195832301,47.15858258486256],[37.69621860553427,47.15858258486256],[37.68136963355083,47.14696164006479],[37.68120748764205,47.14663734023848],[37.59765024233203,47.14566668950419],[37.59706103733718,47.16803047231103]]
+						,
+						[[37.6,47.16],[37.54,47.15],[37.62,47.155],[37.6,47.16]]
+					]
+				]
+			},
+			src: './img/QuickLookImage1.jpg'
+		},
+		{
+			anchorsLatLngs: [[56.344192, 136.59558], [56.344192, 137.8782], [55.613245, 137.8782], [55.613245, 136.59558]],
+			clipGeoJSON: {
+				type: "Polygon",
+				coordinates: [
+					[[136.90579, 56.301281],[137.83902, 56.150009],[137.53169, 55.639533],[136.60979, 55.788635]]
+					// top-left, top-right, bottom-right, bottom-left
+				]
+			},
+			src: './img/image.jpg'
+		}
+		];
+		var current = quickLooks[Math.floor(Math.random() + .5)];
+		var map = new L.Map('map')
+			.fitBounds(L.latLngBounds(current.anchorsLatLngs));
+
+		var layersControl = L.control.layers({
+			Google: L.tileLayer('//mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'),
+			Map: L.tileLayer.Mercator('//vec03.maps.yandex.net/tiles?l=map&v=17.09.21-1&x={x}&y={y}&z={z}&scale=1&lang=ru_RU', {
+				maxZoom: 21,
+				maxNativeZoom: 17
+			}).addTo(map)
+		}, {}, {position: 'topleft'}).addTo(map);
+
+			var imageTransform = L.imageTransformWebGL(current.src, current.anchorsLatLngs, { opacity: 0.5, clip: current.clipGeoJSON, disableSetClip: false })
+				.addTo(map);
+
+			var drawClip;
+			var drawAnchors = new L.GmxDrawing.Feature(map.gmxDrawing,
+				L.polygon(current.anchorsLatLngs, {color: 'red'}),
+				{editable: true, disableAddPoints: true, maxPoints: 4, type: 'Polygon', lineStyle: {color: 'blue'}, pointStyle: {shape: 'box'}}
+			).on('edit', function() {
+				imageTransform.setOpacity(0.5);
+				imageTransform.setAnchors(L.geoJson(drawAnchors.toGeoJSON()).getLayers()[0].getLatLngs()[0]);
+				if (drawClip && !imageTransform.options.disableSetClip) {
+					var geo = imageTransform.getClip();
+					drawClip.setGeoJSON(geo);
+					// drawClip.setGeoJSON(imageTransform.getClip());
+				}
+			}).on('editstop', function() {
+				imageTransform.setOpacity(1);
+			});
+
+			var overlay = L.featureGroup([
+				imageTransform,
+				drawAnchors
+			]).addTo(map);
+			layersControl.addOverlay(overlay, 'imageTransform');
+
+			if (imageTransform.options.clip) {
+				drawClip = new L.GmxDrawing.Feature(map.gmxDrawing, current.clipGeoJSON, {editable: true, type: current.clipGeoJSON.type, lineStyle: {color: 'red'}, pointStyle: {color: 'red'}})
+					.on('edit', function() {
+						var geo = drawClip.toGeoJSON().geometry;
+						imageTransform.setClip(drawClip.toGeoJSON().geometry);
+					});
+				overlay.addLayer(drawClip);
+			}
+	</script>
+    
+    <a href="//github.com/ScanEx/Leaflet.imageTransform" target="_blank">
+        <img style="position: absolute; top: 0; right: 0; border: 0;z-index: 500;" src="//camo.githubusercontent.com/a6677b08c955af8400f44c6298f40e7d19cc5b2d/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f677261795f3664366436642e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_gray_6d6d6d.png">
+    </a>
+</body>
+</html>
