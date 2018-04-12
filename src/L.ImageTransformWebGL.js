@@ -69,26 +69,28 @@ var ext = L.extend({
     },
 
     _initImage: function () {
-		if (L.gmx.getBitmap) {
-			L.gmx.getBitmap(this._url).then(function(ev) {
-				if (ev.imageBitmap) {
-					this._imgNode = ev.imageBitmap;
-					this._imageReady();
-				} else {
-					console.warn('bitmap not found: ', this._url);
-				}
-			}.bind(this));
-		} else {
-			this._imgNode = L.DomUtil.create('img', 'gmxImageTransform');
-			L.extend(this._imgNode, {
-				galleryimg: 'no',
-				onselectstart: L.Util.falseFn,
-				onmousemove: L.Util.falseFn,
-				onload: L.bind(this._onImageLoad, this),
-				onerror: L.bind(this._onImageError, this),
-				src: this._url
-			});
-		}
+		L.gmx.workerPromise.then(function() {
+			if (L.gmx.getBitmap) {
+				L.gmx.getBitmap(this._url).then(function(ev) {
+					if (ev.imageBitmap) {
+						this._imgNode = ev.imageBitmap;
+						this._imageReady();
+					} else {
+						console.warn('bitmap not found: ', this._url);
+					}
+				}.bind(this));
+			} else {
+				this._imgNode = L.DomUtil.create('img', 'gmxImageTransform');
+				L.extend(this._imgNode, {
+					galleryimg: 'no',
+					onselectstart: L.Util.falseFn,
+					onmousemove: L.Util.falseFn,
+					onload: L.bind(this._onImageLoad, this),
+					onerror: L.bind(this._onImageError, this),
+					src: this._url
+				});
+			}
+		}.bind(this));
 
         this._image = L.DomUtil.create('div', 'leaflet-image-layer');
 		this._image.appendChild(this._canvas);
