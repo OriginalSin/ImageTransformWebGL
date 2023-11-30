@@ -494,6 +494,8 @@ if (L.ImageTransform.Utils) {
 	L.gmx = L.gmx || {};
 	L.gmx.WebGL = L.gmx.WebGL || {};
 	L.gmx.WebGL.getMatrix4fv = function(s, d) {		// get transform matrix and it`s inv
+console.log('Получение матрицы', s, d); 
+console.log('Библиотека m4', m4); 
 		var m = L.ImageTransform.Utils.general2DProjection(
 			s[0], s[1], d[0], d[1],	// top-left
 			s[2], s[3], d[2], d[3],	// top-right
